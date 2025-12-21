@@ -3,31 +3,57 @@ import { STORAGE_KEYS, INITIAL_STOCK } from '../constants';
 import { StockItem, Sale, Credit, CashFlow, InventoryReport, CompanyConfig, UserProfile, PMEEntry, LicenseInfo, View, SubCategory, Operation, Appointment, Quote } from '../types';
 
 class StorageService {
-  private currentCompanyId: string | null = localStorage.getItem('nexapme_active_id');
+  private currentCompanyId: string | null = null;
+
+  constructor() {
+    try {
+      this.currentCompanyId = localStorage.getItem('nexapme_active_id');
+    } catch (e) {
+      console.error("Storage access error:", e);
+    }
+  }
 
   private getGlobal<T>(key: string, defaultValue: T): T {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : defaultValue;
+    try {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : defaultValue;
+    } catch (e) {
+      console.error(`Error parsing global key ${key}:`, e);
+      return defaultValue;
+    }
   }
 
   private setGlobal<T>(key: string, data: T): void {
-    localStorage.setItem(key, JSON.stringify(data));
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+      console.error(`Error setting global key ${key}:`, e);
+    }
   }
 
   private getCompanyData<T>(key: string, defaultValue: T): T {
     if (!this.currentCompanyId) return defaultValue;
-    const data = localStorage.getItem(`nexapme_${this.currentCompanyId}_${key}`);
-    return data ? JSON.parse(data) : defaultValue;
+    try {
+      const data = localStorage.getItem(`nexapme_${this.currentCompanyId}_${key}`);
+      return data ? JSON.parse(data) : defaultValue;
+    } catch (e) {
+      console.error(`Error parsing company data ${key}:`, e);
+      return defaultValue;
+    }
   }
 
   private setCompanyData<T>(key: string, data: T): void {
     if (!this.currentCompanyId) return;
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_${key}`, JSON.stringify(data));
+    try {
+      localStorage.setItem(`nexapme_${this.currentCompanyId}_${key}`, JSON.stringify(data));
+    } catch (e) {
+      console.error(`Error setting company data ${key}:`, e);
+    }
   }
 
   setActiveCompany(id: string) {
     this.currentCompanyId = id;
-    localStorage.setItem('nexapme_active_id', id);
+    this.setGlobal('nexapme_active_id', id);
   }
 
   getActiveCompanyId(): string | null {
@@ -50,17 +76,14 @@ class StorageService {
   }
 
   validateLicense(key: string): LicenseInfo | null {
-    // 1. Clé Admin Maîtresse
     if (key === 'nexaPME2025') {
       return { key, type: 'ADMIN', pmeName: 'ADMINISTRATION', idUnique: 'ADMIN' };
     }
 
-    // 2. Clé Universelle Maîtresse (Illimitée)
     if (key === 'nexaUNN2025') {
       return { key, type: 'UNIVERSAL', pmeName: 'ENTREPRISE MAITRESSE', idUnique: 'MASTER_PME' };
     }
 
-    // 3. Vérification de la période d'essai locale
     if (key === 'TRIAL_MODE') {
       let trialExpiry = localStorage.getItem('nexapme_trial_expiry');
       let trialId = localStorage.getItem('nexapme_trial_id');
@@ -78,7 +101,6 @@ class StorageService {
         trialId = 'TRIAL-' + Math.random().toString(36).substr(2, 6).toUpperCase();
         localStorage.setItem('nexapme_trial_id', trialId);
         
-        // Enregistrement dans la liste globale pour l'admin
         this.registerNewPME({
           idUnique: trialId,
           name: "Compte Essai",
@@ -99,7 +121,6 @@ class StorageService {
       };
     }
 
-    // 4. Clés clients enregistrées
     const pmeList = this.getPMEList();
     const pme = pmeList.find(p => p.licenseKey === key);
     if (pme) {
@@ -186,7 +207,6 @@ class StorageService {
     });
     this.updateStock(updatedStock);
 
-    // Enregistrement automatique en caisse
     const cashIn = sale.paymentType === 'MIXED' ? (sale.cashAmount || 0) : 
                    (sale.paymentType === 'CREDIT' ? 0 : sale.total);
     
@@ -337,8 +357,12 @@ class StorageService {
   }
 
   resetAll() {
-    localStorage.clear();
-    window.location.href = window.location.origin;
+    try {
+      localStorage.clear();
+      window.location.href = window.location.origin;
+    } catch (e) {
+      console.error("Clear storage error:", e);
+    }
   }
 }
 
