@@ -6,7 +6,7 @@ import Branding from '../components/Branding';
 import { CATEGORIES } from '../constants';
 import { 
   Building2, User, Wallet, RefreshCw, Trash2, ShieldCheck, 
-  Save, Users, Plus, X, KeyRound, AlertCircle, MapPin, Phone, Mail, Landmark, Percent, Tags, ChevronRight
+  Save, Users, Plus, X, KeyRound, AlertCircle, MapPin, Phone, Mail, Landmark, Percent, Tags, ChevronRight, Camera, Mic, Navigation, Download, Upload, FileJson
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -22,13 +22,43 @@ const Settings: React.FC<SettingsProps> = ({ onReset }) => {
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isSubCatModalOpen, setIsSubCatModalOpen] = useState(false);
   
-  // Correction : Ajout de DASHBOARD par défaut ici aussi
   const [newUser, setNewUser] = useState<Partial<UserProfile>>({ 
     role: 'WORKER', 
     permissions: [View.DASHBOARD, View.SALES, View.STOCK, View.HISTORY] 
   });
-  const [newAdminPin, setNewAdminPin] = useState('');
   const [newSubCat, setNewSubCat] = useState<Partial<SubCategory>>({ parentCategory: CATEGORIES[0] });
+
+  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        storageService.importDataFromJSON(text);
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const requestPermission = async (type: 'camera' | 'mic' | 'geo') => {
+    try {
+      if (type === 'camera') {
+        await navigator.mediaDevices.getUserMedia({ video: true });
+        alert("Autorisation Caméra accordée !");
+      } else if (type === 'mic') {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        alert("Autorisation Micro accordée !");
+      } else if (type === 'geo') {
+        navigator.geolocation.getCurrentPosition(() => {
+          alert("Autorisation Localisation accordée !");
+        }, (err) => {
+          alert("Erreur Localisation : " + err.message);
+        });
+      }
+    } catch (err: any) {
+      alert("Erreur d'autorisation : " + err.message + ". Vérifiez que vous êtes en HTTPS.");
+    }
+  };
 
   const handleSaveConfig = () => {
     if (config) {
@@ -81,26 +111,6 @@ const Settings: React.FC<SettingsProps> = ({ onReset }) => {
     }
   };
 
-  const handleUpdateAdminPin = () => {
-    if (newAdminPin.length === 4) {
-      const updatedUsers = users.map(u => u.id === 'admin' ? { ...u, pin: newAdminPin } : u);
-      setUsers(updatedUsers);
-      storageService.saveUsers(updatedUsers);
-      alert("Code PIN Gérant mis à jour.");
-      setIsPinModalOpen(false);
-      setNewAdminPin('');
-    }
-  };
-
-  const togglePermission = (view: View) => {
-    const current = newUser.permissions || [];
-    if (current.includes(view)) {
-      setNewUser({...newUser, permissions: current.filter(v => v !== view)});
-    } else {
-      setNewUser({...newUser, permissions: [...current, view]});
-    }
-  };
-
   const handleDeleteUser = (id: string) => {
     if (id === 'admin') { alert("Action impossible sur le compte gérant."); return; }
     if (confirm("Supprimer définitivement cet accès ?")) {
@@ -123,6 +133,56 @@ const Settings: React.FC<SettingsProps> = ({ onReset }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-6">
+          
+          {/* Sauvegarde & Restauration */}
+          <section className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 bg-blue-50 flex items-center space-x-3">
+              <FileJson className="text-blue-500" size={24} />
+              <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-[0.2em]">Sauvegarde & Données (JSON)</h3>
+            </div>
+            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button 
+                onClick={() => storageService.exportAllDataAsJSON()}
+                className="flex items-center justify-center space-x-3 p-5 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl"
+              >
+                <Download size={20} />
+                <span>Exporter la Base (JSON)</span>
+              </button>
+              
+              <label className="flex items-center justify-center space-x-3 p-5 bg-white text-blue-600 border-2 border-blue-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 transition-all cursor-pointer">
+                <Upload size={20} />
+                <span>Restaurer une Base</span>
+                <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
+              </label>
+            </div>
+          </section>
+
+          {/* Diagnostic Permissions */}
+          <section className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 bg-emerald-50 flex items-center space-x-3">
+              <ShieldCheck className="text-emerald-500" size={24} />
+              <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-[0.2em]">Diagnostic Système & Permissions</h3>
+            </div>
+            <div className="p-8">
+              <p className="text-xs text-slate-500 font-medium mb-6">
+                Si vous ne parvenez pas à utiliser la caméra pour scanner ou la localisation, cliquez sur les boutons ci-dessous pour forcer la demande d'accès du navigateur.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <button onClick={() => requestPermission('camera')} className="flex items-center justify-center space-x-3 p-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg">
+                  <Camera size={18} />
+                  <span>Activer Caméra</span>
+                </button>
+                <button onClick={() => requestPermission('mic')} className="flex items-center justify-center space-x-3 p-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg">
+                  <Mic size={18} />
+                  <span>Activer Micro</span>
+                </button>
+                <button onClick={() => requestPermission('geo')} className="flex items-center justify-center space-x-3 p-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg">
+                  <Navigation size={18} />
+                  <span>Localisation</span>
+                </button>
+              </div>
+            </div>
+          </section>
           
           {/* Identité & Facturation */}
           <section className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">

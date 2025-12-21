@@ -1,7 +1,9 @@
 {
-  "name": "nexaPME - Plateforme de Gestion PME",
-  "description": "Système modulaire complet de gestion pour PME. Module actuel : Gestion Alimentaire.",
   "requestFramePermissions": [
-    "camera"
-  ]
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "name": "nexaPME - Plateforme de Gestion PME",
+  "description": ""
 }
