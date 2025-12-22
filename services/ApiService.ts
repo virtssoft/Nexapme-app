@@ -10,8 +10,10 @@ export class ApiService {
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
+    const url = new URL(`${API_BASE_URL}${endpoint}`);
+    console.debug(`[API] ${method} ${url.toString()}`, data);
+
     try {
-      const url = new URL(`${API_BASE_URL}${endpoint}`);
       const options: RequestInit = {
         method,
         headers,
@@ -28,15 +30,22 @@ export class ApiService {
       }
 
       const response = await fetch(url.toString(), options);
-      const json = await response.json();
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[API ERROR] HTTP ${response.status}:`, errorText);
+        throw new Error(`Erreur serveur HTTP ${response.status}`);
+      }
 
+      const json = await response.json();
       if (json.error) {
         throw new Error(json.error);
       }
 
       return json;
     } catch (error: any) {
-      console.error(`API Error (${endpoint}):`, error);
+      console.error(`[API FETCH FAILED] ${endpoint}:`, error.message);
+      // On jette l'erreur pour qu'elle soit attrapée par le service appelant
       throw error;
     }
   }
@@ -56,7 +65,6 @@ export class ApiService {
   }
 
   static async createStock(data: any) {
-    // data doit inclure pme_id
     return this.request('/stock/create.php', 'POST', data);
   }
 
@@ -80,7 +88,6 @@ export class ApiService {
 
   // --- Espace Admin (Gestion des PME) ---
   static async getPmeList() {
-    // Note: Cet endpoint doit être implémenté côté PHP pour l'admin
     return this.request('/admin/pme-list.php', 'GET');
   }
 
