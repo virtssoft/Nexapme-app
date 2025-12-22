@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { storageService } from '../services/StorageService';
 import { UserProfile } from '../types';
 import Branding from '../components/Branding';
-import { Lock, User, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Lock, User, ArrowRight, Loader2 } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: UserProfile) => void;
@@ -15,15 +15,30 @@ const Login: React.FC<LoginProps> = ({ onLogin, companyName, category }) => {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const users = storageService.getUsers();
 
-  const handleLogin = () => {
-    if (selectedUser && pin === selectedUser.pin) {
-      storageService.setCurrentUser(selectedUser);
-      onLogin(selectedUser);
-    } else {
-      setError('Code PIN incorrect');
-      setPin('');
+  const handleLogin = async () => {
+    if (selectedUser && pin.length === 4) {
+      setIsLoggingIn(true);
+      setError('');
+      
+      try {
+        const pmeId = storageService.getActiveCompanyId() || '';
+        const authData = await storageService.loginRemote(pmeId, selectedUser.id, pin);
+        
+        if (authData) {
+          onLogin(authData.user);
+        } else {
+          setError('PIN incorrect (API)');
+          setPin('');
+        }
+      } catch (e: any) {
+        setError(e.message || 'Erreur d\'authentification');
+        setPin('');
+      } finally {
+        setIsLoggingIn(false);
+      }
     }
   };
 
@@ -67,10 +82,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, companyName, category }) => {
                    <span>Changer d'utilisateur</span>
                 </button>
                 <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-4">
-                   <Lock size={32} />
+                   {isLoggingIn ? <Loader2 className="animate-spin" size={32} /> : <Lock size={32} />}
                 </div>
                 <h3 className="font-black text-slate-800 uppercase text-sm">Session {selectedUser.name}</h3>
-                <p className="text-xs text-slate-400 font-medium">Entrez votre code PIN secret</p>
+                <p className="text-xs text-slate-400 font-medium">Entrez votre code PIN</p>
               </div>
 
               <div className="space-y-4">
@@ -78,6 +93,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, companyName, category }) => {
                   type="password" 
                   maxLength={4}
                   placeholder="PIN"
+                  disabled={isLoggingIn}
                   className="w-full text-center py-5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-2xl font-black tracking-[1em] outline-none focus:border-slate-900 transition-all"
                   value={pin}
                   onChange={(e) => {
@@ -90,10 +106,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, companyName, category }) => {
                 {error && <p className="text-center text-rose-500 text-[10px] font-black uppercase">{error}</p>}
                 <button 
                   onClick={handleLogin}
-                  disabled={pin.length < 4}
+                  disabled={pin.length < 4 || isLoggingIn}
                   className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-black transition-all disabled:opacity-50"
                 >
-                  Accéder au système
+                  {isLoggingIn ? 'Vérification...' : 'Accéder au système'}
                 </button>
               </div>
             </div>

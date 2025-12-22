@@ -14,27 +14,29 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
   const [error, setError] = useState('');
   const [showHelp, setShowHelp] = useState(false);
 
-  const handleValidate = (providedKey?: string) => {
+  const handleValidate = async (providedKey?: string) => {
     const keyToValidate = providedKey || key.trim();
     if (!keyToValidate) return;
     
     setIsValidating(true);
     setError('');
 
-    setTimeout(() => {
-      const license = storageService.validateLicense(keyToValidate);
+    try {
+      const license = await storageService.validateLicenseRemote(keyToValidate);
       if (license) {
         onValidated(license);
       } else {
-        setError(providedKey === 'TRIAL_MODE' ? 'Période d\'essai expirée.' : 'Clé invalide ou expirée.');
+        setError('Clé de licence invalide ou serveur injoignable.');
       }
+    } catch (e: any) {
+      setError(e.message || 'Erreur de connexion serveur.');
+    } finally {
       setIsValidating(false);
-    }, 1500);
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 overflow-hidden relative">
-      {/* Background Decor */}
       <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-500 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
@@ -46,12 +48,11 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
             <Sparkles className="text-emerald-500" size={40} />
           </div>
           <h1 className="text-5xl font-black text-white tracking-tighter uppercase">nexa<span className="text-emerald-500">PME</span></h1>
-          <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.3em]">Système de Gestion Intégré</p>
+          <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.3em]">Système de Gestion Cloud Intégré</p>
         </div>
 
         <div className="bg-white/5 backdrop-blur-2xl p-8 rounded-[3rem] border border-white/10 shadow-2xl space-y-6">
           <div className="grid grid-cols-1 gap-4">
-            {/* Bouton Essai Gratuit */}
             <button 
               onClick={() => handleValidate('TRIAL_MODE')}
               disabled={isValidating}
@@ -62,9 +63,6 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
                 <span>Nouveaux Utilisateurs</span>
               </div>
               <span className="text-white font-black text-xs uppercase tracking-widest">Essai Gratuit (7 Jours)</span>
-              <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                <Calendar size={48} />
-              </div>
             </button>
 
             <div className="relative py-4">
@@ -72,7 +70,6 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
               <div className="relative flex justify-center"><span className="px-4 bg-transparent text-[8px] font-black text-slate-600 uppercase tracking-widest">ou avec une licence</span></div>
             </div>
 
-            {/* Input Clé de Licence */}
             <div className="space-y-3">
               <div className="relative">
                 <KeyRound className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
@@ -110,14 +107,11 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
 
         {showHelp && (
           <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-3xl animate-in slide-in-from-top-4">
-            <div className="flex items-start space-x-4 text-emerald-400">
+            <div className="flex items-start space-x-4 text-emerald-400 text-center">
               <Phone className="shrink-0 mt-1" size={20} />
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest mb-1">Service Commercial nexaPME</p>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-1">Support nexaPME</p>
                 <p className="text-lg font-black">+243 993 809 052</p>
-                <p className="text-[10px] font-medium text-emerald-500/60 mt-1">
-                  Obtenez votre clé pour 6 mois, 1 an ou 2 ans en contactant nos agents.
-                </p>
               </div>
             </div>
           </div>
