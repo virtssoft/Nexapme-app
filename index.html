@@ -15,7 +15,12 @@
         window.process = { env: { API_KEY: "" } };
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js');
+                // Utilisation d'un chemin relatif pour sw.js pour éviter les erreurs d'origine croisée (origin mismatch)
+                navigator.serviceWorker.register('sw.js').then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }).catch(err => {
+                    console.warn('ServiceWorker registration failed: ', err);
+                });
             });
         }
     </script>
