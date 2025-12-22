@@ -45,7 +45,6 @@ export class ApiService {
       return json;
     } catch (error: any) {
       console.error(`[API FETCH FAILED] ${endpoint}:`, error.message);
-      // On jette l'erreur pour qu'elle soit attrapée par le service appelant
       throw error;
     }
   }
@@ -93,6 +92,14 @@ export class ApiService {
 
   static async createPme(pmeData: any) {
     return this.request('/admin/pme-create.php', 'POST', pmeData);
+  }
+
+  static async updatePme(pmeId: string, pmeData: any) {
+    return this.request('/admin/pme-update.php', 'POST', { id: pmeId, ...pmeData });
+  }
+
+  static async deletePme(pmeId: string) {
+    return this.request('/admin/pme-delete.php', 'POST', { id: pmeId });
   }
 
   // --- Sauvegarde ---
