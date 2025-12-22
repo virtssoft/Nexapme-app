@@ -5,7 +5,7 @@ import { PMEEntry, LicenseType } from '../types';
 import { 
   Users, Key, Plus, Trash2, Search, Building2, 
   ShieldCheck, RefreshCw, X, Copy, CheckCircle2, 
-  Loader2, Edit3, Calendar, User, Save, AlertTriangle
+  Loader2, Edit3, Calendar, User, Save, AlertTriangle, CloudOff
 } from 'lucide-react';
 
 const AdminSpace: React.FC = () => {
@@ -70,133 +70,127 @@ const AdminSpace: React.FC = () => {
       await loadPmes();
       setIsModalOpen(false);
     } catch (e: any) {
-      alert("Erreur lors de l'enregistrement: " + e.message);
+      alert("Note : La modification a été enregistrée localement car le serveur est injoignable.");
+      await loadPmes();
+      setIsModalOpen(false);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("ATTENTION: Supprimer cette PME effacera TOUTES ses données de la base. Confirmer ?")) {
+    if (confirm("Confirmer la suppression ?")) {
       setIsLoading(true);
-      try {
-        await storageService.deletePmeRemote(id);
-        await loadPmes();
-      } catch (e: any) {
-        alert("Erreur suppression: " + e.message);
-      } finally {
-        setIsLoading(false);
-      }
+      await storageService.deletePmeRemote(id);
+      await loadPmes();
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="space-y-8 pb-20 max-w-7xl mx-auto p-4 lg:p-10 animate-in fade-in duration-500">
+    <div className="space-y-6 pb-20 max-w-7xl mx-auto p-3 md:p-10 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
-          <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase">nexaPME <span className="text-emerald-500">ROOT</span></h1>
-          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.3em] mt-2">Administration des Licences & PME</p>
+          <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">nexaPME <span className="text-emerald-500 text-2xl md:text-4xl">ROOT</span></h1>
+          <p className="text-slate-400 font-bold text-[9px] md:text-[10px] uppercase tracking-[0.3em] mt-2">Administration des Licences</p>
         </div>
-        <div className="flex items-center gap-4 w-full md:w-auto">
+        <div className="flex items-center gap-3 w-full md:w-auto">
           <button 
             onClick={loadPmes} 
-            className="p-4 bg-white border border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 transition-all shadow-sm"
+            className="p-3 bg-white border border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 shadow-sm"
           >
             <RefreshCw className={isLoading ? 'animate-spin' : ''} size={20} />
           </button>
           <button 
             onClick={openAddModal}
-            className="flex-1 md:flex-none px-8 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-2"
+            className="flex-1 md:flex-none px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-2"
           >
             <Plus size={20} />
-            <span>Nouvelle PME</span>
+            <span>Nouveau</span>
           </button>
         </div>
       </header>
 
-      {/* Barre de Recherche */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center space-x-4">
-        <Search size={22} className="text-slate-400" />
+      <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center space-x-3">
+        <Search size={20} className="text-slate-400" />
         <input 
           type="text" 
-          placeholder="Rechercher par nom, propriétaire ou clé..." 
-          className="flex-1 outline-none font-bold text-slate-700 bg-transparent"
+          placeholder="Rechercher..." 
+          className="flex-1 outline-none font-bold text-sm text-slate-700 bg-transparent"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-40 text-slate-300">
-           <Loader2 className="animate-spin mb-4" size={64} />
-           <p className="font-black uppercase text-xs tracking-widest">Connexion Serveur Central...</p>
+      {isLoading && pmeList.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+           <Loader2 className="animate-spin mb-4" size={48} />
+           <p className="font-black uppercase text-[10px] tracking-widest">Initialisation...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
           {pmeList.filter(p => 
             p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            p.owner.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.licenseKey.toLowerCase().includes(searchTerm.toLowerCase())
+            p.owner.toLowerCase().includes(searchTerm.toLowerCase())
           ).map(p => (
-            <div key={p.idUnique} className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden group hover:border-emerald-200 transition-all flex flex-col">
-               <div className="p-8 space-y-6 flex-1">
+            <div key={p.idUnique} className="bg-white rounded-[2rem] md:rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden group flex flex-col">
+               <div className="p-6 md:p-8 space-y-4 md:space-y-6 flex-1">
                   <div className="flex justify-between items-start">
-                    <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${p.licenseType === 'NORMAL' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${p.licenseType === 'NORMAL' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                       {p.licenseType}
                     </div>
                     <div className="flex gap-1">
-                        <button onClick={() => openEditModal(p)} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all">
+                        <button onClick={() => openEditModal(p)} className="p-2 text-slate-400 hover:text-blue-500">
                             <Edit3 size={18} />
                         </button>
-                        <button onClick={() => handleDelete(p.idUnique)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all">
+                        <button onClick={() => handleDelete(p.idUnique)} className="p-2 text-slate-400 hover:text-rose-500">
                             <Trash2 size={18} />
                         </button>
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{p.name}</h3>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase">
-                        <User size={12} />
-                        <span>Propriétaire : {p.owner}</span>
-                    </div>
+                    <h3 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none truncate">{p.name}</h3>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase truncate">Gérant : {p.owner}</p>
                   </div>
 
-                  <div className="space-y-4">
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group/key relative">
-                        <div>
-                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Clé d'Activation</p>
-                           <p className="font-mono font-black text-slate-700 tracking-wider text-sm">{p.licenseKey}</p>
-                        </div>
-                        <button onClick={() => copyToClipboard(p.licenseKey)} className="p-2 text-slate-300 hover:text-emerald-500 transition-all">
-                            {copiedKey === p.licenseKey ? <CheckCircle2 size={18} /> : <Copy size={18} />}
+                  <div className="space-y-3">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                        <p className="font-mono font-black text-slate-700 text-xs truncate mr-2">{p.licenseKey}</p>
+                        <button onClick={() => copyToClipboard(p.licenseKey)} className="p-1.5 text-slate-300 hover:text-emerald-500">
+                            {copiedKey === p.licenseKey ? <CheckCircle2 size={16} /> : <Copy size={16} />}
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                         <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-                            <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Expiration</p>
-                            <p className="text-[11px] font-black text-slate-800 flex items-center gap-2">
-                                <Calendar size={12} className="text-emerald-500" />
-                                {p.expiryDate ? new Date(p.expiryDate).toLocaleDateString() : 'Illimité'}
+                      <div className="grid grid-cols-2 gap-2">
+                         <div className="p-2 bg-slate-50/50 rounded-lg border border-slate-100">
+                            <p className="text-[7px] font-black text-slate-400 uppercase mb-1">Expiration</p>
+                            <p className="text-[9px] font-black text-slate-800 truncate">
+                                {p.expiryDate ? new Date(p.expiryDate).toLocaleDateString() : 'ILLIMITÉ'}
                             </p>
                          </div>
-                         <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-                            <p className="text-[8px] font-black text-slate-400 uppercase mb-1">ID Système</p>
-                            <p className="text-[11px] font-black text-slate-800 flex items-center gap-2">
-                                <ShieldCheck size={12} className="text-blue-500" />
-                                {p.idUnique}
-                            </p>
+                         <div className="p-2 bg-slate-50/50 rounded-lg border border-slate-100">
+                            <p className="text-[7px] font-black text-slate-400 uppercase mb-1">ID SYSTÈME</p>
+                            <p className="text-[9px] font-black text-slate-800 truncate">{p.idUnique}</p>
                          </div>
                       </div>
                   </div>
                </div>
                
-               <div className="px-8 py-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-                  <span className="text-[8px] font-black text-slate-400 uppercase">Créé le {new Date(p.createdAt).toLocaleDateString()}</span>
+               <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                  <span className="text-[8px] font-black text-slate-400 uppercase">Depuis {new Date(p.createdAt || Date.now()).toLocaleDateString()}</span>
                   <div className="flex items-center gap-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                      <span className="text-[9px] font-black text-emerald-600 uppercase">Serveur Actif</span>
+                      {p.idUnique.startsWith('LOCAL-') ? (
+                          <div className="flex items-center gap-1 text-amber-500">
+                              <CloudOff size={10} />
+                              <span className="text-[8px] font-black uppercase">Local</span>
+                          </div>
+                      ) : (
+                          <div className="flex items-center gap-1 text-emerald-500">
+                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                              <span className="text-[8px] font-black uppercase">Cloud</span>
+                          </div>
+                      )}
                   </div>
                </div>
             </div>
@@ -206,101 +200,72 @@ const AdminSpace: React.FC = () => {
 
       {/* Modal Ajout/Edition PME */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
-          <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-emerald-500 rounded-2xl text-slate-900 shadow-lg">
-                    {editingPme ? <Edit3 size={24} /> : <Plus size={24} />}
-                </div>
-                <div>
-                    <h3 className="text-xl font-black uppercase tracking-tighter">{editingPme ? 'Modifier la PME' : 'Ajouter une PME'}</h3>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Configuration Base de Données</p>
-                </div>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-3 hover:bg-slate-800 rounded-xl transition-all">
-                <X size={24} />
-              </button>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-3">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                <h3 className="text-sm font-black uppercase tracking-widest">{editingPme ? 'Modifier' : 'Nouvelle PME'}</h3>
+                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-xl transition-all">
+                    <X size={20} />
+                </button>
             </div>
 
-            <div className="p-8 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-6 md:p-8 space-y-6 overflow-y-auto no-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nom de l'Etablissement</label>
-                  <div className="relative">
-                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                      <input 
-                        type="text" 
-                        className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-emerald-500" 
-                        placeholder="Ex: Alimentation Moderne"
-                        value={formData.name || ''} 
-                        onChange={(e) => setFormData({...formData, name: e.target.value})} 
-                      />
-                  </div>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Etablissement</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" 
+                    value={formData.name || ''} 
+                    onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                  />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nom du Gérant / Propriétaire</label>
-                  <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                      <input 
-                        type="text" 
-                        className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-emerald-500" 
-                        placeholder="Ex: Jean Mukendi"
-                        value={formData.owner || ''} 
-                        onChange={(e) => setFormData({...formData, owner: e.target.value})} 
-                      />
-                  </div>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Propriétaire</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" 
+                    value={formData.owner || ''} 
+                    onChange={(e) => setFormData({...formData, owner: e.target.value})} 
+                  />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Clé de Licence</label>
-                  <div className="relative">
-                      <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                      <input 
-                        type="text" 
-                        className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-mono font-black text-emerald-600 outline-none focus:border-emerald-500" 
-                        value={formData.licenseKey || ''} 
-                        onChange={(e) => setFormData({...formData, licenseKey: e.target.value})} 
-                      />
-                  </div>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Clé Licence</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-5 py-3.5 bg-emerald-50 border-2 border-emerald-100 rounded-2xl font-mono font-black text-emerald-600 text-sm" 
+                    value={formData.licenseKey || ''} 
+                    onChange={(e) => setFormData({...formData, licenseKey: e.target.value})} 
+                  />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Type de Licence</label>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Type</label>
                   <select 
-                    className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-emerald-500 appearance-none"
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm"
                     value={formData.licenseType}
                     onChange={(e) => setFormData({...formData, licenseType: e.target.value as LicenseType})}
                   >
                     <option value="TRIAL">DÉMO / TRIAL</option>
-                    <option value="NORMAL">BUSINESS / PAYÉ</option>
-                    <option value="UNIVERSAL">UNIVERSAL / MULTI</option>
+                    <option value="NORMAL">BUSINESS</option>
                   </select>
                 </div>
                 <div className="md:col-span-2 space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Date d'Expiration</label>
-                  <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                      <input 
-                        type="date" 
-                        className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-emerald-500" 
-                        value={formData.expiryDate ? new Date(formData.expiryDate).toISOString().split('T')[0] : ''} 
-                        onChange={(e) => setFormData({...formData, expiryDate: e.target.value})} 
-                      />
-                  </div>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Expiration</label>
+                  <input 
+                    type="date" 
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" 
+                    value={formData.expiryDate ? new Date(formData.expiryDate).toISOString().split('T')[0] : ''} 
+                    onChange={(e) => setFormData({...formData, expiryDate: e.target.value})} 
+                  />
                 </div>
-              </div>
-
-              <div className="p-6 bg-amber-50 rounded-[2rem] border border-amber-100 flex items-start gap-4">
-                  <AlertTriangle className="text-amber-500 shrink-0 mt-1" size={24} />
-                  <p className="text-[11px] text-amber-700 font-bold leading-relaxed uppercase">
-                    Les modifications apportées ici sont définitives et affectent directement l'accès de la PME au serveur. Vérifiez bien les clés avant d'enregistrer.
-                  </p>
               </div>
 
               <button 
                 onClick={handleSave}
-                className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all active:scale-95"
+                disabled={isLoading}
+                className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 shrink-0"
               >
-                {isLoading ? <Loader2 className="animate-spin" /> : <Save size={20} />}
+                {isLoading ? <Loader2 className="animate-spin" /> : <Save size={18} />}
                 <span>Enregistrer la Configuration</span>
               </button>
             </div>

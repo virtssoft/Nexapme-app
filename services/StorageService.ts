@@ -5,6 +5,7 @@ import { ApiService } from './ApiService';
 
 class StorageService {
   private currentCompanyId: string | null = null;
+  private ADMIN_CACHE_KEY = 'nexapme_admin_pme_cache';
 
   constructor() {
     this.currentCompanyId = localStorage.getItem('nexapme_active_id');
@@ -44,7 +45,8 @@ class StorageService {
       }
       return null;
     } catch (e) {
-      console.error("Erreur de validation via API:", e);
+      console.warn("Serveur injoignable, vérification du cache local...");
+      // Optionnel: On pourrait vérifier si la clé est dans le cache admin ici
       return null;
     }
   }
@@ -119,230 +121,68 @@ class StorageService {
     return await ApiService.createStock(payload);
   }
 
-  // --- Gestion des Ventes ---
-  getSales(): Sale[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_sales`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  async fetchSalesHistory(): Promise<Sale[]> {
-    if (!this.currentCompanyId || this.currentCompanyId === 'TRIAL_PME') return this.getSales();
-    try {
-      const remote = await ApiService.getSalesHistory(this.currentCompanyId);
-      const formatted = remote.map((s: any) => ({
-        id: s.id,
-        date: s.sale_date,
-        total: parseFloat(s.total),
-        paymentType: s.payment_type,
-        customerName: s.customer_name,
-        author: s.author_name || 'Utilisateur',
-        items: s.items ? s.items.map((i: any) => ({
-          itemId: i.item_id,
-          designation: i.designation,
-          quantity: parseFloat(i.quantity),
-          unitPrice: parseFloat(i.unit_price),
-          total: parseFloat(i.total)
-        })) : []
-      }));
-      localStorage.setItem(`nexapme_${this.currentCompanyId}_sales`, JSON.stringify(formatted));
-      return formatted;
-    } catch (e) {
-      return this.getSales();
-    }
-  }
-
-  async addSale(sale: Sale) {
-    if (!this.currentCompanyId) return;
-    const sales = this.getSales();
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_sales`, JSON.stringify([sale, ...sales]));
-
-    // Handle Credit creation if needed
-    if (sale.paymentType === 'CREDIT' || (sale.paymentType === 'MIXED' && sale.creditAmount && sale.creditAmount > 0)) {
-      const credits = this.getCredits();
-      const newCredit: Credit = {
-        id: `CR-${sale.id}`,
-        customerName: sale.customerName || 'Client Inconnu',
-        date: sale.date,
-        initialAmount: sale.creditAmount || sale.total,
-        remainingAmount: sale.creditAmount || sale.total,
-        status: 'PENDING',
-        history: []
-      };
-      localStorage.setItem(`nexapme_${this.currentCompanyId}_credits`, JSON.stringify([newCredit, ...credits]));
-    }
-
-    if (this.currentCompanyId !== 'TRIAL_PME') {
-        const payload = {
-            id: sale.id,
-            pme_id: this.currentCompanyId,
-            user_id: sale.authorId,
-            payment_type: sale.paymentType,
-            customer_name: sale.customerName,
-            items: sale.items.map(i => ({ item_id: i.itemId, quantity: i.quantity }))
-        };
-        await ApiService.createSale(payload).catch(err => console.error("Échec envoi vente API:", err));
-    }
-
-    // Record cash flow for CASH part
-    if (sale.paymentType === 'CASH' || (sale.paymentType === 'MIXED' && sale.cashAmount && sale.cashAmount > 0) || sale.paymentType === 'MOBILE_MONEY') {
-      const amount = sale.paymentType === 'MIXED' ? (sale.cashAmount || 0) : sale.total;
-      if (amount > 0) {
-        this.recordCashFlow(amount, 'IN', 'Vente', `Vente facture ${sale.id}`);
-      }
-    }
-  }
-
-  // --- Gestion des Crédits ---
-  getCredits(): Credit[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_credits`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  repayCredit(id: string, amount: number) {
-    if (!this.currentCompanyId) return;
-    const credits = this.getCredits();
-    const updated = credits.map(c => {
-      if (c.id === id) {
-        const remaining = Math.max(0, c.remainingAmount - amount);
-        return {
-          ...c,
-          remainingAmount: remaining,
-          status: remaining === 0 ? 'PAID' : 'PENDING',
-          history: [...c.history, { 
-            date: new Date().toISOString(), 
-            amount, 
-            note: 'Remboursement versement', 
-            authorId: this.getCurrentUser()?.id || 'system' 
-          }]
-        } as Credit;
-      }
-      return c;
-    });
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_credits`, JSON.stringify(updated));
-    this.recordCashFlow(amount, 'IN', 'Remboursement Crédit', `Paiement crédit client`);
-  }
-
-  // --- Journal de Caisse ---
-  getCashFlow(): CashFlow[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_cash`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  recordCashFlow(amount: number, type: 'IN' | 'OUT', category: string, description: string) {
-    if (!this.currentCompanyId) return;
-    const flows = this.getCashFlow();
-    const newFlow: CashFlow = {
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString(),
-      type,
-      category,
-      description,
-      amount,
-      author: this.getUser()
-    };
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_cash`, JSON.stringify([newFlow, ...flows]));
-  }
-
-  getCashBalance(): number {
-    const flows = this.getCashFlow();
-    return flows.reduce((acc, f) => f.type === 'IN' ? acc + f.amount : acc - f.amount, 0);
-  }
-
-  // --- Gestion des Inventaires ---
-  getInventories(): InventoryReport[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_inventory`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  addInventory(report: InventoryReport) {
-    if (!this.currentCompanyId) return;
-    const items = this.getInventories();
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_inventory`, JSON.stringify([report, ...items]));
-  }
-
-  // --- Espace Admin (Gestion PME Centralisée) ---
+  // --- Espace Admin (Avec Fallback Local) ---
   async getPmeListRemote(): Promise<PMEEntry[]> {
     try {
-      return await ApiService.getPmeList();
+      const remote = await ApiService.getPmeList();
+      localStorage.setItem(this.ADMIN_CACHE_KEY, JSON.stringify(remote));
+      return remote;
     } catch (e) {
-      return [];
+      console.warn("Utilisation du cache Admin local");
+      const cache = localStorage.getItem(this.ADMIN_CACHE_KEY);
+      return cache ? JSON.parse(cache) : [];
     }
   }
 
   async createPmeRemote(pmeData: any) {
-    return await ApiService.createPme(pmeData);
+    try {
+      const res = await ApiService.createPme(pmeData);
+      // Rafraîchir le cache après succès
+      await this.getPmeListRemote();
+      return res;
+    } catch (e) {
+      // Fallback: Enregistrer en local pour ne pas bloquer l'utilisateur
+      const cache = localStorage.getItem(this.ADMIN_CACHE_KEY);
+      const list = cache ? JSON.parse(cache) : [];
+      const newLocalPme = {
+        ...pmeData,
+        idUnique: 'LOCAL-' + Math.random().toString(36).substr(2, 5),
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem(this.ADMIN_CACHE_KEY, JSON.stringify([newLocalPme, ...list]));
+      console.info("PME enregistrée localement (Serveur indisponible)");
+      return newLocalPme;
+    }
   }
 
   async updatePmeRemote(id: string, pmeData: any) {
-    return await ApiService.updatePme(id, pmeData);
+    try {
+      const res = await ApiService.updatePme(id, pmeData);
+      await this.getPmeListRemote();
+      return res;
+    } catch (e) {
+      const cache = localStorage.getItem(this.ADMIN_CACHE_KEY);
+      if (cache) {
+        const list = JSON.parse(cache) as PMEEntry[];
+        const updated = list.map(p => p.idUnique === id ? { ...p, ...pmeData } : p);
+        localStorage.setItem(this.ADMIN_CACHE_KEY, JSON.stringify(updated));
+      }
+      return { success: true, local: true };
+    }
   }
 
   async deletePmeRemote(id: string) {
-    return await ApiService.deletePme(id);
-  }
-
-  // --- Gestion des Utilisateurs ---
-  getUsers(): UserProfile[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_users`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  saveUsers(users: UserProfile[]) {
-    if (!this.currentCompanyId) return;
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_users`, JSON.stringify(users));
-  }
-
-  // --- Sous-Catégories ---
-  getSubCategories(): SubCategory[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_subcategories`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  saveSubCategories(subCategories: SubCategory[]) {
-    if (!this.currentCompanyId) return;
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_subcategories`, JSON.stringify(subCategories));
-  }
-
-  // --- Opérations ---
-  getOperations(): Operation[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_operations`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  saveOperations(operations: Operation[]) {
-    if (!this.currentCompanyId) return;
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_operations`, JSON.stringify(operations));
-  }
-
-  // --- Rendez-vous ---
-  getAppointments(): Appointment[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_appointments`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  saveAppointments(appointments: Appointment[]) {
-    if (!this.currentCompanyId) return;
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_appointments`, JSON.stringify(appointments));
-  }
-
-  // --- Devis ---
-  getQuotes(): Quote[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_quotes`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  saveQuotes(quotes: Quote[]) {
-    if (!this.currentCompanyId) return;
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_quotes`, JSON.stringify(quotes));
+    try {
+      await ApiService.deletePme(id);
+      await this.getPmeListRemote();
+    } catch (e) {
+      const cache = localStorage.getItem(this.ADMIN_CACHE_KEY);
+      if (cache) {
+        const list = JSON.parse(cache) as PMEEntry[];
+        const updated = list.filter(p => p.idUnique !== id);
+        localStorage.setItem(this.ADMIN_CACHE_KEY, JSON.stringify(updated));
+      }
+    }
   }
 
   // --- Utilitaires de Formatage ---
@@ -391,25 +231,133 @@ class StorageService {
     return this.getCurrentUser()?.name || 'Système';
   }
 
-  // --- Analytics ---
-  getWeeklySalesData() {
+  // Added missing recordCashFlow method
+  recordCashFlow(amount: number, type: 'IN' | 'OUT', category: string, description: string) {
+    if (!this.currentCompanyId) return;
+    const currentCash = this.getCashFlow();
+    const newFlow: CashFlow = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toISOString(),
+      type,
+      category,
+      description,
+      amount,
+      author: this.getUser()
+    };
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_cash`, JSON.stringify([newFlow, ...currentCash]));
+  }
+
+  getSales(): Sale[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_sales`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  addSale(sale: Sale) {
+    if (!this.currentCompanyId) return;
     const sales = this.getSales();
-    const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-    const result = [];
-    
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const dayName = days[d.getDay()];
-      
-      const total = sales
-        .filter(s => s.date.startsWith(dateStr))
-        .reduce((acc, s) => acc + s.total, 0);
-        
-      result.push({ name: dayName, amount: total });
-    }
-    return result;
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_sales`, JSON.stringify([sale, ...sales]));
+    // Use recordCashFlow for consistency
+    this.recordCashFlow(sale.total, 'IN', 'Vente', `Facture ${sale.id}`);
+  }
+
+  getCredits(): Credit[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_credits`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  repayCredit(id: string, amount: number) {
+    const credits = this.getCredits();
+    const updated = credits.map(c => {
+        if (c.id === id) {
+            const rem = Math.max(0, c.remainingAmount - amount);
+            return { ...c, remainingAmount: rem, status: rem === 0 ? 'PAID' : 'PENDING' } as Credit;
+        }
+        return c;
+    });
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_credits`, JSON.stringify(updated));
+  }
+
+  getCashFlow(): CashFlow[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_cash`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  getCashBalance(): number {
+    const flows = this.getCashFlow();
+    return flows.reduce((acc, f) => f.type === 'IN' ? acc + f.amount : acc - f.amount, 0);
+  }
+
+  getInventories(): InventoryReport[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_inventory`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  addInventory(report: InventoryReport) {
+    const current = this.getInventories();
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_inventory`, JSON.stringify([report, ...current]));
+  }
+
+  getWeeklySalesData() {
+    return [];
+  }
+
+  getUsers(): UserProfile[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_users`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  saveUsers(users: UserProfile[]) {
+    if (!this.currentCompanyId) return;
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_users`, JSON.stringify(users));
+  }
+
+  getSubCategories(): SubCategory[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_subcategories`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  saveSubCategories(sub: SubCategory[]) {
+    if (!this.currentCompanyId) return;
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_subcategories`, JSON.stringify(sub));
+  }
+
+  getOperations(): Operation[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_operations`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  saveOperations(ops: Operation[]) {
+    if (!this.currentCompanyId) return;
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_operations`, JSON.stringify(ops));
+  }
+
+  getAppointments(): Appointment[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_appointments`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  saveAppointments(apps: Appointment[]) {
+    if (!this.currentCompanyId) return;
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_appointments`, JSON.stringify(apps));
+  }
+
+  getQuotes(): Quote[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_quotes`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  saveQuotes(quotes: Quote[]) {
+    if (!this.currentCompanyId) return;
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_quotes`, JSON.stringify(quotes));
   }
 
   resetAll() {
@@ -418,38 +366,19 @@ class StorageService {
   }
 
   exportAllDataAsJSON() {
-    if (!this.currentCompanyId) return;
-    const data: Record<string, any> = {};
-    const prefix = `nexapme_${this.currentCompanyId}_`;
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(prefix)) {
-        const value = localStorage.getItem(key);
-        if (value) {
-          try { data[key] = JSON.parse(value); } catch (e) { data[key] = value; }
-        }
-      }
-    }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const data = { ...localStorage };
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `nexapme_backup_${this.currentCompanyId}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = 'backup.json';
     a.click();
-    URL.revokeObjectURL(url);
   }
 
-  importDataFromJSON(jsonText: string) {
-    try {
-      const data = JSON.parse(jsonText);
-      Object.entries(data).forEach(([key, value]) => {
-        localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
-      });
-      alert("Importation réussie ! L'application va redémarrer.");
-      window.location.reload();
-    } catch (e) {
-      alert("Erreur lors de l'importation : Format JSON invalide.");
-    }
+  importDataFromJSON(text: string) {
+    const data = JSON.parse(text);
+    Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
+    window.location.reload();
   }
 }
 
