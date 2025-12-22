@@ -23,16 +23,39 @@ import { Menu, LogOut, ShieldAlert, Loader2, Sparkles, Zap } from 'lucide-react'
 const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
+  
+  // États de Session Persistants
   const [activeLicense, setActiveLicense] = useState<LicenseInfo | null>(null);
   const [companyConfig, setCompanyConfig] = useState<CompanyConfig | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  
   const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // Initialisation avec un délai réaliste pour l'effet de marque
-    const timer = setTimeout(() => setIsInitializing(false), 2500);
-    return () => clearTimeout(timer);
+    // Phase d'initialisation : Restauration de la session existante
+    const restoreSession = async () => {
+      const storedLicense = storageService.getLicense();
+      if (storedLicense) {
+        setActiveLicense(storedLicense);
+        
+        if (storedLicense.type !== 'ADMIN') {
+          storageService.setActiveCompany(storedLicense.idUnique);
+          const config = storageService.getCompanyInfo();
+          if (config) setCompanyConfig(config);
+          
+          const user = storageService.getCurrentUser();
+          if (user) setCurrentUser(user);
+        } else {
+          setCurrentView(View.ADMIN_SPACE);
+        }
+      }
+      
+      // Petit délai pour l'effet de marque
+      setTimeout(() => setIsInitializing(false), 2000);
+    };
+
+    restoreSession();
   }, []);
 
   const triggerSessionLoader = (callback: () => void) => {
@@ -40,7 +63,7 @@ const App: React.FC = () => {
     setTimeout(() => {
       callback();
       setIsSwitchingSession(false);
-    }, 1200);
+    }, 1000);
   };
 
   const handleReset = () => {
@@ -83,12 +106,13 @@ const App: React.FC = () => {
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
           </div>
-          <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.5em]">Optimisation de votre business</p>
+          <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.5em]">Synchronisation Session...</p>
         </div>
       </div>
     );
   }
 
+  // ÉCRAN 1 : Validation de la Licence
   if (!activeLicense) {
     return <Launcher onValidated={(license) => {
       triggerSessionLoader(() => {
@@ -96,16 +120,14 @@ const App: React.FC = () => {
         if (license.type === 'ADMIN') {
           setCurrentView(View.ADMIN_SPACE);
         } else {
-          storageService.setActiveCompany(license.idUnique);
           const config = storageService.getCompanyInfo();
           if (config) setCompanyConfig(config);
-          const user = storageService.getCurrentUser();
-          if (user) setCurrentUser(user);
         }
       });
     }} />;
   }
 
+  // ÉCRAN SPÉCIFIQUE : Espace Administrateur Central
   if (activeLicense.type === 'ADMIN') {
     return (
       <div className="min-h-screen bg-slate-50">
@@ -117,21 +139,23 @@ const App: React.FC = () => {
              </div>
              <div>
                <h2 className="font-black text-lg uppercase tracking-widest leading-none">ESPACE ROOT</h2>
-               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Console de Maintenance</p>
+               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Console Cloud Management</p>
              </div>
           </div>
-          <button onClick={() => triggerSessionLoader(() => setActiveLicense(null))} className="p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-black text-xs uppercase flex items-center space-x-2 transition-all shadow-lg shadow-rose-900/20">
+          <button 
+            onClick={() => triggerSessionLoader(() => { storageService.clearLicense(); setActiveLicense(null); })} 
+            className="p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-black text-xs uppercase flex items-center space-x-2 transition-all shadow-lg shadow-rose-900/20"
+          >
             <LogOut size={16} /> <span>Quitter Admin</span>
           </button>
         </header>
-        <main className="p-4">
-           <AdminSpace />
-        </main>
+        <main className="p-4"><AdminSpace /></main>
         {isSwitchingSession && <SessionLoader />}
       </div>
     );
   }
 
+  // ÉCRAN 2 : Configuration Initiale (si nouvelle PME)
   if (!companyConfig) {
     return <Onboarding onComplete={(config) => {
       triggerSessionLoader(() => {
@@ -141,14 +165,16 @@ const App: React.FC = () => {
     }} />;
   }
 
+  // ÉCRAN 3 : Authentification Utilisateur (Saisie PIN)
   if (!currentUser) {
     return <Login 
       onLogin={(user) => triggerSessionLoader(() => setCurrentUser(user))} 
       companyName={companyConfig.name} 
-      category={companyConfig.subDomain || "Alimentation"} 
+      category={companyConfig.subDomain || "Commerce"} 
     />;
   }
 
+  // ÉCRAN 4 : Interface Principale
   const handleNavigate = (view: View) => {
     const permissions = currentUser.permissions || [];
     if (!permissions.includes(view)) {
@@ -168,11 +194,14 @@ const App: React.FC = () => {
   };
 
   const handleExitApp = () => {
-    triggerSessionLoader(() => {
-      setActiveLicense(null);
-      setCompanyConfig(null);
-      setCurrentUser(null);
-    });
+    if (confirm("Voulez-vous quitter l'application ? La licence sera à nouveau vérifiée lors de la prochaine ouverture.")) {
+      triggerSessionLoader(() => {
+        storageService.clearLicense();
+        setActiveLicense(null);
+        setCompanyConfig(null);
+        setCurrentUser(null);
+      });
+    }
   };
 
   return (
@@ -193,7 +222,7 @@ const App: React.FC = () => {
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-slate-800 rounded-lg">
             <Menu size={24} />
           </button>
-          <Branding companyName={companyConfig.name} category="Alimentation" size="sm" />
+          <Branding companyName={companyConfig.name} category="Cloud PME" size="sm" />
         </div>
         <div className="flex items-center space-x-2">
           <NotificationCenter />
@@ -220,7 +249,7 @@ const SessionLoader = () => (
          <div className="absolute inset-0 bg-emerald-500/20 blur-2xl rounded-full animate-pulse"></div>
          <Loader2 className="animate-spin text-emerald-500 relative z-10" size={56} />
        </div>
-       <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] animate-pulse">Synchronisation nexaPME...</p>
+       <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] animate-pulse">Traitement Sécurisé...</p>
     </div>
   </div>
 );

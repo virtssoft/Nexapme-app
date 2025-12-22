@@ -6,6 +6,7 @@ import { ApiService } from './ApiService';
 class StorageService {
   private currentCompanyId: string | null = null;
   private ADMIN_CACHE_KEY = 'nexapme_admin_pme_cache';
+  private LICENSE_STORAGE_KEY = 'nexapme_active_license_info';
 
   constructor() {
     this.currentCompanyId = localStorage.getItem('nexapme_active_id');
@@ -20,33 +21,55 @@ class StorageService {
     return this.currentCompanyId;
   }
 
-  // --- Méthodes de Session ---
+  // --- Gestion de la Licence (Session PME) ---
+  saveLicense(license: LicenseInfo) {
+    localStorage.setItem(this.LICENSE_STORAGE_KEY, JSON.stringify(license));
+    if (license.idUnique !== 'ADMIN') {
+      this.setActiveCompany(license.idUnique);
+    }
+  }
+
+  getLicense(): LicenseInfo | null {
+    const data = localStorage.getItem(this.LICENSE_STORAGE_KEY);
+    return data ? JSON.parse(data) : null;
+  }
+
+  clearLicense() {
+    localStorage.removeItem(this.LICENSE_STORAGE_KEY);
+    localStorage.removeItem('nexapme_active_id');
+    localStorage.removeItem('nexapme_jwt');
+    this.setCurrentUser(null);
+  }
+
+  // --- Méthodes de Session (Utilisateur) ---
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
     if (key === 'TRIAL_MODE') {
-      return { key, type: 'TRIAL', pmeName: 'ENTREPRISE D\'ESSAI', idUnique: 'TRIAL_PME' };
+      const info: LicenseInfo = { key, type: 'TRIAL', pmeName: 'ENTREPRISE D\'ESSAI', idUnique: 'TRIAL_PME' };
+      this.saveLicense(info);
+      return info;
     }
     if (key === 'nexaPME2025') {
-      return { key, type: 'ADMIN', pmeName: 'ADMINISTRATION', idUnique: 'ADMIN' };
-    }
-    if (key === 'nexaUNN2025') {
-      return { key, type: 'UNIVERSAL', pmeName: 'MASTER PME', idUnique: 'MASTER_PME' };
+      const info: LicenseInfo = { key, type: 'ADMIN', pmeName: 'ADMINISTRATION', idUnique: 'ADMIN' };
+      this.saveLicense(info);
+      return info;
     }
 
     try {
       const res = await ApiService.validateLicense(key);
       if (res && res.id) {
-        return {
+        const info: LicenseInfo = {
           key: key,
           type: res.license_type,
           expiryDate: res.expiry_date,
           pmeName: res.name,
           idUnique: res.id
         };
+        this.saveLicense(info);
+        return info;
       }
       return null;
     } catch (e) {
-      console.warn("Serveur injoignable, vérification du cache local...");
-      // Optionnel: On pourrait vérifier si la clé est dans le cache admin ici
+      console.warn("Erreur validation licence");
       return null;
     }
   }
@@ -54,7 +77,7 @@ class StorageService {
   async loginRemote(pme_id: string, user_id: string, pin: string): Promise<{user: UserProfile, token: string} | null> {
     if (pme_id === 'TRIAL_PME' || pme_id === 'ADMIN') {
         const user: UserProfile = { id: user_id, name: 'Utilisateur Test', role: 'MANAGER', pin };
-        localStorage.setItem('nexapme_current_session', JSON.stringify(user));
+        this.setCurrentUser(user);
         return { user, token: 'local-session-token' };
     }
 
@@ -62,11 +85,21 @@ class StorageService {
       const res = await ApiService.login(pme_id, user_id, pin);
       localStorage.setItem('nexapme_jwt', res.token);
       const user = { id: res.user.id, name: res.user.name, role: res.user.role, pin };
-      localStorage.setItem('nexapme_current_session', JSON.stringify(user));
+      this.setCurrentUser(user);
       return { user, token: res.token };
     } catch (e) {
       return null;
     }
+  }
+
+  getCurrentUser(): UserProfile | null {
+    const session = localStorage.getItem('nexapme_current_session');
+    return session ? JSON.parse(session) : null;
+  }
+
+  setCurrentUser(user: UserProfile | null) {
+    if (user) localStorage.setItem('nexapme_current_session', JSON.stringify(user));
+    else localStorage.removeItem('nexapme_current_session');
   }
 
   // --- Gestion du Stock ---
@@ -128,7 +161,6 @@ class StorageService {
       localStorage.setItem(this.ADMIN_CACHE_KEY, JSON.stringify(remote));
       return remote;
     } catch (e) {
-      console.warn("Utilisation du cache Admin local");
       const cache = localStorage.getItem(this.ADMIN_CACHE_KEY);
       return cache ? JSON.parse(cache) : [];
     }
@@ -137,11 +169,9 @@ class StorageService {
   async createPmeRemote(pmeData: any) {
     try {
       const res = await ApiService.createPme(pmeData);
-      // Rafraîchir le cache après succès
       await this.getPmeListRemote();
       return res;
     } catch (e) {
-      // Fallback: Enregistrer en local pour ne pas bloquer l'utilisateur
       const cache = localStorage.getItem(this.ADMIN_CACHE_KEY);
       const list = cache ? JSON.parse(cache) : [];
       const newLocalPme = {
@@ -150,7 +180,6 @@ class StorageService {
         createdAt: new Date().toISOString()
       };
       localStorage.setItem(this.ADMIN_CACHE_KEY, JSON.stringify([newLocalPme, ...list]));
-      console.info("PME enregistrée localement (Serveur indisponible)");
       return newLocalPme;
     }
   }
@@ -185,53 +214,7 @@ class StorageService {
     }
   }
 
-  // --- Utilitaires de Formatage ---
-  getExchangeRate(): number {
-    const rate = localStorage.getItem(`nexapme_${this.currentCompanyId}_rate`);
-    return rate ? parseFloat(rate) : 2850;
-  }
-
-  updateExchangeRate(rate: number): void {
-    if (!this.currentCompanyId) return;
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_rate`, rate.toString());
-  }
-
-  formatFC(amount: number): string {
-    return new Intl.NumberFormat('fr-FR').format(amount) + ' FC';
-  }
-
-  formatUSD(amountFC: number): string {
-    const rate = this.getExchangeRate();
-    const usd = amountFC / rate;
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(usd);
-  }
-
-  getCurrentUser(): UserProfile | null {
-    const session = localStorage.getItem('nexapme_current_session');
-    return session ? JSON.parse(session) : null;
-  }
-
-  setCurrentUser(user: UserProfile | null) {
-    if (user) localStorage.setItem('nexapme_current_session', JSON.stringify(user));
-    else localStorage.removeItem('nexapme_current_session');
-  }
-
-  getCompanyInfo(): CompanyConfig | null {
-    if (!this.currentCompanyId) return null;
-    const config = localStorage.getItem(`nexapme_${this.currentCompanyId}_config`);
-    return config ? JSON.parse(config) : null;
-  }
-
-  saveCompanyInfo(config: CompanyConfig) {
-    if (!this.currentCompanyId) return;
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_config`, JSON.stringify(config));
-  }
-
-  getUser(): string {
-    return this.getCurrentUser()?.name || 'Système';
-  }
-
-  // Added missing recordCashFlow method
+  // --- Caisse et Ventes ---
   recordCashFlow(amount: number, type: 'IN' | 'OUT', category: string, description: string) {
     if (!this.currentCompanyId) return;
     const currentCash = this.getCashFlow();
@@ -257,10 +240,68 @@ class StorageService {
     if (!this.currentCompanyId) return;
     const sales = this.getSales();
     localStorage.setItem(`nexapme_${this.currentCompanyId}_sales`, JSON.stringify([sale, ...sales]));
-    // Use recordCashFlow for consistency
     this.recordCashFlow(sale.total, 'IN', 'Vente', `Facture ${sale.id}`);
   }
 
+  getCashFlow(): CashFlow[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_cash`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  getCashBalance(): number {
+    const flows = this.getCashFlow();
+    return flows.reduce((acc, f) => f.type === 'IN' ? acc + f.amount : acc - f.amount, 0);
+  }
+
+  // --- Configuration et Utilitaires ---
+  getCompanyInfo(): CompanyConfig | null {
+    if (!this.currentCompanyId) return null;
+    const config = localStorage.getItem(`nexapme_${this.currentCompanyId}_config`);
+    return config ? JSON.parse(config) : null;
+  }
+
+  saveCompanyInfo(config: CompanyConfig) {
+    if (!this.currentCompanyId) return;
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_config`, JSON.stringify(config));
+  }
+
+  getExchangeRate(): number {
+    const rate = localStorage.getItem(`nexapme_${this.currentCompanyId}_rate`);
+    return rate ? parseFloat(rate) : 2850;
+  }
+
+  updateExchangeRate(rate: number): void {
+    if (!this.currentCompanyId) return;
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_rate`, rate.toString());
+  }
+
+  formatFC(amount: number): string {
+    return new Intl.NumberFormat('fr-FR').format(amount) + ' FC';
+  }
+
+  formatUSD(amountFC: number): string {
+    const rate = this.getExchangeRate();
+    const usd = amountFC / rate;
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(usd);
+  }
+
+  getUser(): string {
+    return this.getCurrentUser()?.name || 'Système';
+  }
+
+  getUsers(): UserProfile[] {
+    if (!this.currentCompanyId) return [];
+    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_users`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
+  saveUsers(users: UserProfile[]) {
+    if (!this.currentCompanyId) return;
+    localStorage.setItem(`nexapme_${this.currentCompanyId}_users`, JSON.stringify(users));
+  }
+
+  // --- Autres méthodes de stockage ---
   getCredits(): Credit[] {
     if (!this.currentCompanyId) return [];
     const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_credits`);
@@ -279,17 +320,6 @@ class StorageService {
     localStorage.setItem(`nexapme_${this.currentCompanyId}_credits`, JSON.stringify(updated));
   }
 
-  getCashFlow(): CashFlow[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_cash`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  getCashBalance(): number {
-    const flows = this.getCashFlow();
-    return flows.reduce((acc, f) => f.type === 'IN' ? acc + f.amount : acc - f.amount, 0);
-  }
-
   getInventories(): InventoryReport[] {
     if (!this.currentCompanyId) return [];
     const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_inventory`);
@@ -303,17 +333,6 @@ class StorageService {
 
   getWeeklySalesData() {
     return [];
-  }
-
-  getUsers(): UserProfile[] {
-    if (!this.currentCompanyId) return [];
-    const cache = localStorage.getItem(`nexapme_${this.currentCompanyId}_users`);
-    return cache ? JSON.parse(cache) : [];
-  }
-
-  saveUsers(users: UserProfile[]) {
-    if (!this.currentCompanyId) return;
-    localStorage.setItem(`nexapme_${this.currentCompanyId}_users`, JSON.stringify(users));
   }
 
   getSubCategories(): SubCategory[] {
