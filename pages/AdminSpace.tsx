@@ -3,9 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { storageService } from '../services/StorageService';
 import { PMEEntry, LicenseType } from '../types';
 import { 
-  Users, Key, Plus, Trash2, Search, Building2, 
-  ShieldCheck, RefreshCw, X, Copy, CheckCircle2, 
-  Loader2, Edit3, Calendar, User, Save, AlertTriangle, CloudOff
+  Plus, Trash2, Search, 
+  RefreshCw, X, Copy, CheckCircle2, 
+  Loader2, Edit3, Save, CloudOff
 } from 'lucide-react';
 
 const AdminSpace: React.FC = () => {
@@ -70,7 +70,7 @@ const AdminSpace: React.FC = () => {
       await loadPmes();
       setIsModalOpen(false);
     } catch (e: any) {
-      alert("Note : La modification a été enregistrée localement car le serveur est injoignable.");
+      alert("Note : Enregistré localement.");
       await loadPmes();
       setIsModalOpen(false);
     } finally {
@@ -97,7 +97,7 @@ const AdminSpace: React.FC = () => {
         <div className="flex items-center gap-3 w-full md:w-auto">
           <button 
             onClick={loadPmes} 
-            className="p-3 bg-white border border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 shadow-sm"
+            className="p-3 bg-white border border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 shadow-sm transition-colors"
           >
             <RefreshCw className={isLoading ? 'animate-spin' : ''} size={20} />
           </button>
@@ -140,17 +140,17 @@ const AdminSpace: React.FC = () => {
                       {p.licenseType}
                     </div>
                     <div className="flex gap-1">
-                        <button onClick={() => openEditModal(p)} className="p-2 text-slate-400 hover:text-blue-500">
+                        <button onClick={() => openEditModal(p)} className="p-2 text-slate-400 hover:text-blue-500 transition-colors">
                             <Edit3 size={18} />
                         </button>
-                        <button onClick={() => handleDelete(p.idUnique)} className="p-2 text-slate-400 hover:text-rose-500">
+                        <button onClick={() => handleDelete(p.idUnique)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors">
                             <Trash2 size={18} />
                         </button>
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <h3 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none truncate">{p.name}</h3>
+                    <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tighter leading-none truncate">{p.name}</h3>
                     <p className="text-[9px] text-slate-400 font-bold uppercase truncate">Gérant : {p.owner}</p>
                   </div>
 
@@ -178,7 +178,7 @@ const AdminSpace: React.FC = () => {
                </div>
                
                <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-                  <span className="text-[8px] font-black text-slate-400 uppercase">Depuis {new Date(p.createdAt || Date.now()).toLocaleDateString()}</span>
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Depuis {new Date(p.createdAt || Date.now()).toLocaleDateString()}</span>
                   <div className="flex items-center gap-1">
                       {p.idUnique.startsWith('LOCAL-') ? (
                           <div className="flex items-center gap-1 text-amber-500">
@@ -215,7 +215,7 @@ const AdminSpace: React.FC = () => {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Etablissement</label>
                   <input 
                     type="text" 
-                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" 
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-emerald-500" 
                     value={formData.name || ''} 
                     onChange={(e) => setFormData({...formData, name: e.target.value})} 
                   />
@@ -224,7 +224,7 @@ const AdminSpace: React.FC = () => {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Propriétaire</label>
                   <input 
                     type="text" 
-                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" 
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-emerald-500" 
                     value={formData.owner || ''} 
                     onChange={(e) => setFormData({...formData, owner: e.target.value})} 
                   />
@@ -233,7 +233,7 @@ const AdminSpace: React.FC = () => {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Clé Licence</label>
                   <input 
                     type="text" 
-                    className="w-full px-5 py-3.5 bg-emerald-50 border-2 border-emerald-100 rounded-2xl font-mono font-black text-emerald-600 text-sm" 
+                    className="w-full px-5 py-3.5 bg-emerald-50 border-2 border-emerald-100 rounded-2xl font-mono font-black text-emerald-600 text-sm outline-none" 
                     value={formData.licenseKey || ''} 
                     onChange={(e) => setFormData({...formData, licenseKey: e.target.value})} 
                   />
@@ -241,7 +241,7 @@ const AdminSpace: React.FC = () => {
                 <div className="space-y-1">
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Type</label>
                   <select 
-                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm"
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none"
                     value={formData.licenseType}
                     onChange={(e) => setFormData({...formData, licenseType: e.target.value as LicenseType})}
                   >
@@ -253,7 +253,7 @@ const AdminSpace: React.FC = () => {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Expiration</label>
                   <input 
                     type="date" 
-                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" 
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none" 
                     value={formData.expiryDate ? new Date(formData.expiryDate).toISOString().split('T')[0] : ''} 
                     onChange={(e) => setFormData({...formData, expiryDate: e.target.value})} 
                   />

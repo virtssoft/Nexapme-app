@@ -4,8 +4,8 @@ import { storageService } from '../services/StorageService';
 import { StockItem } from '../types';
 import { CATEGORIES } from '../constants';
 import { 
-  Search, Plus, Edit2, Trash2, X, Scissors, Save, 
-  Layers, ShoppingCart, AlertCircle, Calculator, Loader2
+  Search, Plus, Edit2, X, Save, 
+  Loader2
 } from 'lucide-react';
 import Branding from '../components/Branding';
 
@@ -18,7 +18,6 @@ const Stock: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<StockItem | null>(null);
   const [formData, setFormData] = useState<Partial<StockItem>>({});
 
   useEffect(() => {
@@ -66,7 +65,7 @@ const Stock: React.FC = () => {
 
       <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center space-x-3">
         <Search size={20} className="text-slate-400" />
-        <input type="text" placeholder="Rechercher..." className="flex-1 outline-none font-bold text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        <input type="text" placeholder="Rechercher..." className="flex-1 outline-none font-bold text-sm bg-transparent" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
       </div>
 
       {isLoading ? (
@@ -84,10 +83,10 @@ const Stock: React.FC = () => {
                  </span>
                  <p className="text-xs font-black text-slate-800">{item.quantity} {item.unit}</p>
                </div>
-               <h3 className="font-black text-slate-800 uppercase text-sm mb-4">{item.designation}</h3>
+               <h3 className="font-black text-slate-800 text-sm mb-4 leading-tight">{item.designation}</h3>
                <div className="flex justify-between items-end">
                   <p className="text-xl font-black text-slate-900">{storageService.formatFC(item.retailPrice)}</p>
-                  <button onClick={() => { setEditingItem(item); setFormData(item); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit2 size={18} /></button>
+                  <button onClick={() => { setFormData(item); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-blue-600 transition-colors"><Edit2 size={18} /></button>
                </div>
             </div>
           ))}

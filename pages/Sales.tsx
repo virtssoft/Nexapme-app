@@ -4,8 +4,7 @@ import { storageService } from '../services/StorageService';
 import { StockItem, SaleItem, Sale } from '../types';
 import { 
   Search, ShoppingCart, Trash2, ShoppingBag, 
-  Printer, Wallet, Plus, Globe, CreditCard, Layers,
-  ArrowRight
+  Printer, Plus, Layers
 } from 'lucide-react';
 import DocumentPrinter from '../components/DocumentPrinter';
 
@@ -25,7 +24,6 @@ const Sales: React.FC = () => {
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [cashAmount, setCashAmount] = useState<number>(0);
 
-  // Filtrage du stock selon le mode
   const displayedStock = useMemo(() => {
     return allStock.filter(item => {
       const matchesMode = saleMode === 'WHOLESALE' ? item.isWholesale : !item.isWholesale;
@@ -105,19 +103,17 @@ const Sales: React.FC = () => {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-20 lg:h-[calc(100vh-140px)]">
-      {/* Zone Articles */}
       <div className="lg:col-span-7 flex flex-col space-y-4">
-        {/* Toggle Mode Gros/Détail */}
         <div className="bg-white p-1 rounded-3xl border border-slate-200 shadow-sm flex">
           <button 
-            onClick={() => { setSaleMode('RETAIL'); setSearchTerm(''); }}
+            onClick={() => setSaleMode('RETAIL')}
             className={`flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${saleMode === 'RETAIL' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-indigo-600'}`}
           >
             <ShoppingCart size={16} />
             <span>Vente Détail</span>
           </button>
           <button 
-            onClick={() => { setSaleMode('WHOLESALE'); setSearchTerm(''); }}
+            onClick={() => setSaleMode('WHOLESALE')}
             className={`flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${saleMode === 'WHOLESALE' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-emerald-600'}`}
           >
             <Layers size={16} />
@@ -129,7 +125,7 @@ const Sales: React.FC = () => {
           <Search size={20} className="text-slate-400" />
           <input 
             type="text" 
-            placeholder={saleMode === 'RETAIL' ? "Chercher détail..." : "Chercher gros (Sacs, Cartons...)"} 
+            placeholder={saleMode === 'RETAIL' ? "Chercher détail..." : "Chercher gros..."} 
             className="flex-1 outline-none font-bold text-sm bg-transparent" 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
@@ -145,9 +141,9 @@ const Sales: React.FC = () => {
             >
               <div>
                 <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${item.quantity <= item.alertThreshold ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
-                  Stock: {item.quantity} {item.unit}
+                  Stock: {item.quantity}
                 </span>
-                <h4 className="font-black text-slate-800 text-xs line-clamp-2 mt-2 leading-tight uppercase">{item.designation}</h4>
+                <h4 className="font-bold text-slate-800 text-xs line-clamp-2 mt-2 leading-tight">{item.designation}</h4>
               </div>
               <div className="flex items-center justify-between mt-4">
                 <p className={`font-black text-sm ${saleMode === 'RETAIL' ? 'text-indigo-600' : 'text-emerald-600'}`}>
@@ -162,11 +158,10 @@ const Sales: React.FC = () => {
         </div>
       </div>
 
-      {/* Zone Panier */}
       <div className="lg:col-span-5 flex flex-col bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl overflow-hidden">
         <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
           <h3 className="text-sm font-black uppercase tracking-widest">Panier Vente</h3>
-          <span className="bg-slate-800 px-3 py-1 rounded-full text-[10px] font-black text-slate-400">{cart.length} Articles</span>
+          <span className="bg-slate-800 px-3 py-1 rounded-full text-[10px] font-black text-slate-400">{cart.length}</span>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
@@ -178,9 +173,9 @@ const Sales: React.FC = () => {
           ) : cart.map(item => (
             <div key={item.itemId} className={`p-4 rounded-2xl border transition-all ${item.isWholesaleApplied ? 'bg-emerald-50/20 border-emerald-100' : 'bg-slate-50/50 border-slate-100'}`}>
               <div className="flex justify-between items-start mb-2">
-                <div>
-                  <p className="font-black text-slate-800 text-[11px] uppercase">{item.designation}</p>
-                  <p className="text-[9px] text-slate-400 font-bold">{item.unitPrice.toLocaleString()} FC / {item.isWholesaleApplied ? 'Gros' : 'U'}</p>
+                <div className="flex-1 mr-2">
+                  <p className="font-bold text-slate-800 text-[11px] leading-tight">{item.designation}</p>
+                  <p className="text-[9px] text-slate-400 font-bold">{item.unitPrice.toLocaleString()} FC</p>
                 </div>
                 <button onClick={() => setCart(cart.filter(c => c.itemId !== item.itemId))} className="text-rose-300 hover:text-rose-500"><Trash2 size={16} /></button>
               </div>

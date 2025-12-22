@@ -24,7 +24,7 @@ const Branding: React.FC<BrandingProps> = ({ companyName, category, variant = 'd
       <span className={`font-black uppercase tracking-[0.3em] leading-none mb-1 ${isLight ? 'text-slate-400' : 'text-emerald-400'} ${currentSize.top}`}>
         nexaPME
       </span>
-      <h1 className={`font-black uppercase tracking-tighter leading-tight ${isLight ? 'text-slate-800' : 'text-white'} ${currentSize.mid}`}>
+      <h1 className={`font-black tracking-tighter leading-tight ${isLight ? 'text-slate-800' : 'text-white'} ${currentSize.mid}`}>
         {companyName}
       </h1>
       <span className={`font-bold uppercase tracking-widest mt-1 ${isLight ? 'text-slate-400' : 'text-slate-500'} ${currentSize.bot}`}>

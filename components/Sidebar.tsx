@@ -45,18 +45,18 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, user, isOpen
         fixed top-0 left-0 z-[70] 
         h-[100dvh] w-64 
         bg-slate-900 text-white 
-        flex flex-col
+        flex flex-col overflow-hidden
         transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        lg:sticky lg:top-0
+        lg:sticky lg:top-0 lg:h-screen
       `}>
         
-        <div className="p-6 border-b border-slate-800 flex justify-between items-center relative">
+        <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
           <Branding companyName={companyName} category={isManager ? "Administration" : "Session Vendeur"} size="sm" />
           <button onClick={onClose} className="lg:hidden p-2 hover:bg-slate-800 rounded-xl text-slate-400"><X size={20} /></button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto no-scrollbar">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto no-scrollbar min-h-0">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.view;
@@ -79,7 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, user, isOpen
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800 space-y-2 bg-slate-900/50">
+        <div className="p-4 border-t border-slate-800 space-y-2 bg-slate-900/50 shrink-0">
           <div className="px-4 py-3 bg-slate-800/30 rounded-xl flex items-center space-x-3 border border-slate-800/50">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${isManager ? 'bg-emerald-500 text-slate-900' : 'bg-blue-500 text-white'}`}>
               {user.name.charAt(0).toUpperCase()}

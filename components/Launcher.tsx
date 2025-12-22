@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { KeyRound, ShieldCheck, HelpCircle, Phone, ArrowRight, Loader2, Sparkles, Clock, Calendar } from 'lucide-react';
+import { KeyRound, HelpCircle, Phone, Loader2, Sparkles, Clock } from 'lucide-react';
 import { storageService } from '../services/StorageService';
 import { LicenseInfo } from '../types';
 
@@ -8,7 +8,7 @@ interface LauncherProps {
   onValidated: (license: LicenseInfo) => void;
 }
 
-const Launcher: React.FC = ({ onValidated }) => {
+const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
   const [key, setKey] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState('');
@@ -76,9 +76,9 @@ const Launcher: React.FC = ({ onValidated }) => {
                 <input 
                   type="text" 
                   placeholder="Clé licence..."
-                  className="w-full pl-12 pr-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl text-white font-black tracking-widest outline-none focus:border-blue-500 transition-all placeholder:text-slate-600 text-sm"
+                  className="w-full pl-12 pr-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl text-white font-bold tracking-widest outline-none focus:border-blue-500 transition-all placeholder:text-slate-600 text-sm"
                   value={key}
-                  onChange={(e) => setKey(e.target.value.toUpperCase())}
+                  onChange={(e) => setKey(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleValidate()}
                 />
               </div>
