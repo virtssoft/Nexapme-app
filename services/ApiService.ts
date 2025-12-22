@@ -20,7 +20,11 @@ export class ApiService {
       if (data && method === 'POST') {
         options.body = JSON.stringify(data);
       } else if (data && method === 'GET') {
-        Object.keys(data).forEach(key => url.searchParams.append(key, data[key]));
+        Object.keys(data).forEach(key => {
+          if (data[key] !== undefined && data[key] !== null) {
+            url.searchParams.append(key, data[key]);
+          }
+        });
       }
 
       const response = await fetch(url.toString(), options);
@@ -37,7 +41,7 @@ export class ApiService {
     }
   }
 
-  // --- Auth ---
+  // --- Authentification ---
   static async validateLicense(licenseKey: string) {
     return this.request('/auth/validate-license.php', 'POST', { license_key: licenseKey });
   }
@@ -52,6 +56,7 @@ export class ApiService {
   }
 
   static async createStock(data: any) {
+    // data doit inclure pme_id
     return this.request('/stock/create.php', 'POST', data);
   }
 
@@ -59,7 +64,7 @@ export class ApiService {
     return this.request('/stock/transform.php', 'POST', { source_id, target_id, quantity });
   }
 
-  // --- Sales ---
+  // --- Ventes ---
   static async createSale(saleData: any) {
     return this.request('/sales/create.php', 'POST', saleData);
   }
@@ -68,8 +73,23 @@ export class ApiService {
     return this.request('/sales/history.php', 'GET', { pme_id });
   }
 
-  // --- Dashboard ---
+  // --- Dashboard & Analytics ---
   static async getDashboardStats(pme_id: string) {
     return this.request('/dashboard/stats.php', 'GET', { pme_id });
+  }
+
+  // --- Espace Admin (Gestion des PME) ---
+  static async getPmeList() {
+    // Note: Cet endpoint doit être implémenté côté PHP pour l'admin
+    return this.request('/admin/pme-list.php', 'GET');
+  }
+
+  static async createPme(pmeData: any) {
+    return this.request('/admin/pme-create.php', 'POST', pmeData);
+  }
+
+  // --- Sauvegarde ---
+  static async exportData(pme_id: string) {
+    return this.request('/backup/export.php', 'GET', { pme_id });
   }
 }
