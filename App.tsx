@@ -18,13 +18,12 @@ import Login from './pages/Login';
 import Launcher from './components/Launcher';
 import Branding from './components/Branding';
 import { storageService } from './services/StorageService';
-import { Menu, LogOut, ShieldAlert, Loader2, Sparkles, Zap } from 'lucide-react';
+import { Menu, LogOut, ShieldAlert, Loader2, Sparkles } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
   
-  // États de Session Persistants
   const [activeLicense, setActiveLicense] = useState<LicenseInfo | null>(null);
   const [companyConfig, setCompanyConfig] = useState<CompanyConfig | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -33,7 +32,6 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // Phase d'initialisation : Restauration de la session existante
     const restoreSession = async () => {
       const storedLicense = storageService.getLicense();
       if (storedLicense) {
@@ -50,8 +48,6 @@ const App: React.FC = () => {
           setCurrentView(View.ADMIN_SPACE);
         }
       }
-      
-      // Petit délai pour l'effet de marque
       setTimeout(() => setIsInitializing(false), 2000);
     };
 
@@ -67,7 +63,7 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-    if (confirm("ATTENTION : Cette action supprimera TOUTES les données de cette entreprise. Continuer ?")) {
+    if (confirm("ATTENTION : Cette action supprimera TOUTES les données. Continuer ?")) {
       storageService.resetAll();
     }
   };
@@ -106,13 +102,12 @@ const App: React.FC = () => {
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
           </div>
-          <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.5em]">Synchronisation Session...</p>
+          <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.5em]">Initialisation Cloud...</p>
         </div>
       </div>
     );
   }
 
-  // ÉCRAN 1 : Validation de la Licence
   if (!activeLicense) {
     return <Launcher onValidated={(license) => {
       triggerSessionLoader(() => {
@@ -127,7 +122,6 @@ const App: React.FC = () => {
     }} />;
   }
 
-  // ÉCRAN SPÉCIFIQUE : Espace Administrateur Central
   if (activeLicense.type === 'ADMIN') {
     return (
       <div className="min-h-screen bg-slate-50">
@@ -155,7 +149,6 @@ const App: React.FC = () => {
     );
   }
 
-  // ÉCRAN 2 : Configuration Initiale (si nouvelle PME)
   if (!companyConfig) {
     return <Onboarding onComplete={(config) => {
       triggerSessionLoader(() => {
@@ -165,7 +158,6 @@ const App: React.FC = () => {
     }} />;
   }
 
-  // ÉCRAN 3 : Authentification Utilisateur (Saisie PIN)
   if (!currentUser) {
     return <Login 
       onLogin={(user) => triggerSessionLoader(() => setCurrentUser(user))} 
@@ -174,13 +166,22 @@ const App: React.FC = () => {
     />;
   }
 
-  // ÉCRAN 4 : Interface Principale
   const handleNavigate = (view: View) => {
+    // FIX: Gestion sécurisée des permissions
     const permissions = currentUser.permissions || [];
-    if (!permissions.includes(view)) {
-      alert("Accès refusé.");
+    
+    // Si la liste des permissions est vide (bug session), on autorise les vues de base selon le rôle
+    if (permissions.length === 0) {
+       const defaults = storageService.getDefaultPermissions(currentUser.role);
+       if (!defaults.includes(view)) {
+         alert("Accès refusé. Cette fonctionnalité ne fait pas partie de vos droits.");
+         return;
+       }
+    } else if (!permissions.includes(view)) {
+      alert("Accès refusé. Veuillez contacter l'administrateur.");
       return;
     }
+
     setCurrentView(view);
     setIsSidebarOpen(false);
   };
@@ -194,7 +195,7 @@ const App: React.FC = () => {
   };
 
   const handleExitApp = () => {
-    if (confirm("Voulez-vous quitter l'application ? La licence sera à nouveau vérifiée lors de la prochaine ouverture.")) {
+    if (confirm("Voulez-vous quitter l'application ?")) {
       triggerSessionLoader(() => {
         storageService.clearLicense();
         setActiveLicense(null);
@@ -249,7 +250,7 @@ const SessionLoader = () => (
          <div className="absolute inset-0 bg-emerald-500/20 blur-2xl rounded-full animate-pulse"></div>
          <Loader2 className="animate-spin text-emerald-500 relative z-10" size={56} />
        </div>
-       <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] animate-pulse">Traitement Sécurisé...</p>
+       <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] animate-pulse">Traitement Cloud...</p>
     </div>
   </div>
 );

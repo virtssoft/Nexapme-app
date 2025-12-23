@@ -1,109 +1,88 @@
 
 const API_BASE_URL = 'https://nexaapi.comfortasbl.org/api';
 
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
 export class ApiService {
-  private static async request(endpoint: string, method: 'GET' | 'POST' = 'GET', data?: any) {
+  private static async request<T>(endpoint: string, method: 'GET' | 'POST' = 'GET', data?: any): Promise<T> {
     const token = localStorage.getItem('nexapme_jwt');
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
 
     const url = new URL(`${API_BASE_URL}${endpoint}`);
-    console.debug(`[API] ${method} ${url.toString()}`, data);
-
+    
     try {
       const options: RequestInit = {
         method,
         headers,
+        // Ajout d'un timeout pour éviter les attentes infinies en cas de réseau instable
+        signal: AbortSignal.timeout(10000) 
       };
 
-      if (data && method === 'POST') {
+      if (method === 'POST' && data) {
         options.body = JSON.stringify(data);
-      } else if (data && method === 'GET') {
+      } else if (method === 'GET' && data) {
         Object.keys(data).forEach(key => {
           if (data[key] !== undefined && data[key] !== null) {
-            url.searchParams.append(key, data[key]);
+            url.searchParams.append(key, String(data[key]));
           }
         });
       }
 
       const response = await fetch(url.toString(), options);
       
+      if (response.status === 401) {
+        localStorage.removeItem('nexapme_jwt');
+        // Ne pas recharger brutalement si on est déjà sur la page de login
+        if (!window.location.hash.includes('login')) {
+           window.location.reload();
+        }
+        throw new Error("Session expirée.");
+      }
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[API ERROR] HTTP ${response.status}:`, errorText);
-        throw new Error(`Erreur serveur HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Erreur serveur (${response.status})`);
       }
 
-      const json = await response.json();
-      if (json.error) {
-        throw new Error(json.error);
-      }
-
-      return json;
+      return await response.json();
     } catch (error: any) {
-      console.error(`[API FETCH FAILED] ${endpoint}:`, error.message);
+      // Gestion spécifique des erreurs de connexion (Failed to fetch)
+      if (error.name === 'TypeError' || error.message.includes('fetch')) {
+        console.error(`[NETWORK ERROR] ${endpoint}: Impossible de joindre le serveur.`);
+        throw new Error("Erreur de connexion : Le serveur nexaPME est injoignable.");
+      }
+      console.error(`[API ERROR] ${endpoint}:`, error.message);
       throw error;
     }
   }
 
-  // --- Authentification ---
-  static async validateLicense(licenseKey: string) {
-    return this.request('/auth/validate-license.php', 'POST', { license_key: licenseKey });
-  }
+  // Auth
+  static validateLicense(key: string) { return this.request<any>('/auth/validate-license.php', 'POST', { license_key: key }); }
+  static login(pme_id: string, user_id: string, pin: string) { return this.request<any>('/auth/login.php', 'POST', { pme_id, user_id, pin }); }
 
-  static async login(pme_id: string, user_id: string, pin: string) {
-    return this.request('/auth/login.php', 'POST', { pme_id, user_id, pin });
-  }
+  // Stock
+  static getStock(pme_id: string) { return this.request<any[]>('/stock/index.php', 'GET', { pme_id }); }
+  static saveProduct(product: any) { return this.request<any>('/stock/save.php', 'POST', product); }
 
-  // --- Stock ---
-  static async getStock(pme_id: string) {
-    return this.request('/stock/index.php', 'GET', { pme_id });
-  }
+  // Sales
+  static createSale(saleData: any) { return this.request<any>('/sales/create.php', 'POST', saleData); }
+  static getSales(pme_id: string, params?: any) { return this.request<any[]>('/sales/history.php', 'GET', { pme_id, ...params }); }
 
-  static async createStock(data: any) {
-    return this.request('/stock/create.php', 'POST', data);
-  }
-
-  static async transformStock(source_id: string, target_id: string, quantity: number) {
-    return this.request('/stock/transform.php', 'POST', { source_id, target_id, quantity });
-  }
-
-  // --- Ventes ---
-  static async createSale(saleData: any) {
-    return this.request('/sales/create.php', 'POST', saleData);
-  }
-
-  static async getSalesHistory(pme_id: string) {
-    return this.request('/sales/history.php', 'GET', { pme_id });
-  }
-
-  // --- Dashboard & Analytics ---
-  static async getDashboardStats(pme_id: string) {
-    return this.request('/dashboard/stats.php', 'GET', { pme_id });
-  }
-
-  // --- Espace Admin (Gestion des PME) ---
-  static async getPmeList() {
-    return this.request('/admin/pme-list.php', 'GET');
-  }
-
-  static async createPme(pmeData: any) {
-    return this.request('/admin/pme-create.php', 'POST', pmeData);
-  }
-
-  static async updatePme(pmeId: string, pmeData: any) {
-    return this.request('/admin/pme-update.php', 'POST', { id: pmeId, ...pmeData });
-  }
-
-  static async deletePme(pmeId: string) {
-    return this.request('/admin/pme-delete.php', 'POST', { id: pmeId });
-  }
-
-  // --- Sauvegarde ---
-  static async exportData(pme_id: string) {
-    return this.request('/backup/export.php', 'GET', { pme_id });
-  }
+  // Finance
+  static getCashFlow(pme_id: string) { return this.request<any[]>('/finance/cash.php', 'GET', { pme_id }); }
+  static recordCash(data: any) { return this.request<any>('/finance/cash-record.php', 'POST', data); }
+  static getCredits(pme_id: string) { return this.request<any[]>('/finance/credits.php', 'GET', { pme_id }); }
+  static repayCredit(data: any) { return this.request<any>('/finance/credit-repay.php', 'POST', data); }
 }
