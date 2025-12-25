@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { storageService } from '../services/StorageService';
 import { ApiService } from '../services/ApiService';
 import { PMEEntry, LicenseType } from '../types';
-// Added missing AlertCircle import
 import { 
   Plus, Trash2, Search, 
   RefreshCw, X, Copy, CheckCircle2, 
@@ -66,7 +65,7 @@ const AdminSpace: React.FC = () => {
 
   const handleSave = async () => {
     if (!formData.name || !formData.owner) {
-      alert("Veuillez remplir les champs obligatoires.");
+      alert("Veuillez remplir les champs obligatoires (Nom et Propriétaire).");
       return;
     }
 
@@ -79,8 +78,9 @@ const AdminSpace: React.FC = () => {
       }
       await loadPmes();
       setIsModalOpen(false);
+      alert("PME enregistrée avec succès sur le serveur !");
     } catch (e: any) {
-      alert("Erreur de sauvegarde sur le serveur.");
+      alert("Erreur serveur : " + e.message);
     } finally {
       setIsLoading(false);
     }
@@ -89,9 +89,14 @@ const AdminSpace: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (confirm("Confirmer la suppression ? Cette action est irréversible sur le serveur.")) {
       setIsLoading(true);
-      await storageService.deletePmeRemote(id);
-      await loadPmes();
-      setIsLoading(false);
+      try {
+        await storageService.deletePmeRemote(id);
+        await loadPmes();
+      } catch (e: any) {
+        alert("Erreur lors de la suppression : " + e.message);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 

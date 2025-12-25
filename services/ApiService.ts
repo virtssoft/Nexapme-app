@@ -24,13 +24,21 @@ export class ApiService {
 
   private static async request<T>(endpoint: string, method: 'GET' | 'POST' = 'GET', data?: any): Promise<T> {
     const token = localStorage.getItem('nexapme_jwt');
+    const licenseKey = localStorage.getItem('nexapme_active_license_key');
+    
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     };
     
+    // Priorité au JWT pour les sessions utilisateurs normales
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // Toujours envoyer la clé de licence si présente (utile pour les routes Admin)
+    if (licenseKey) {
+      headers['X-License-Key'] = licenseKey;
     }
 
     const url = new URL(`${API_BASE_URL}${endpoint}`);
@@ -68,7 +76,7 @@ export class ApiService {
       }
 
       if (!response.ok) {
-        throw new Error(`Erreur serveur (${response.status})`);
+        throw new Error(json.message || `Erreur serveur (${response.status})`);
       }
 
       return json;
