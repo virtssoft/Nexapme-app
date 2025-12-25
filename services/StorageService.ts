@@ -16,7 +16,6 @@ class StorageService {
 
   getActiveCompanyId() { return this.currentPmeId; }
 
-  // Génération UUID Client comme demandé par la doc
   generateUUID() {
     return crypto.randomUUID();
   }
@@ -81,7 +80,6 @@ class StorageService {
     if (!this.currentPmeId) return [];
     try {
       const data = await ApiService.getSales(this.currentPmeId);
-      // Adaptation des champs sale_date vers date
       const sales = data.map((s: any) => ({
         ...s,
         date: s.sale_date || s.date,
@@ -95,12 +93,6 @@ class StorageService {
     }
   }
 
-  // --- Dashboard Stats ---
-  async fetchDashboardStats() {
-    if (!this.currentPmeId) return null;
-    return await ApiService.getStats(this.currentPmeId);
-  }
-
   // --- Auth & Session ---
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
     try {
@@ -108,7 +100,6 @@ class StorageService {
         return { key, type: 'TRIAL', pmeName: 'Démo nexaPME', idUnique: 'TRIAL_ID' };
       }
       const res = await ApiService.validateLicense(key);
-      // Map JSON doc { id, name, license_type, expiry_date } -> { idUnique, pmeName, type, expiryDate }
       const license: LicenseInfo = {
         key: key,
         idUnique: res.id,
@@ -137,7 +128,87 @@ class StorageService {
     return { user, token: res.token };
   }
 
-  // --- Local Storage fallback / cache management ---
+  // --- Admin Methods (ROOT) ---
+  async getPmeListRemote(): Promise<PMEEntry[]> {
+    try {
+      const data = await ApiService.getAdminPmes();
+      return data.map((p: any) => ({
+        idUnique: p.id,
+        name: p.name,
+        owner: p.owner_name,
+        licenseKey: p.license_key,
+        licenseType: p.license_type,
+        expiryDate: p.expiry_date,
+        createdAt: p.created_at || new Date().toISOString()
+      }));
+    } catch (e) {
+      console.error("Admin Fetch Error:", e);
+      return [];
+    }
+  }
+
+  async createPmeRemote(data: any) {
+    const payload = {
+      id: data.idUnique || this.generateUUID(),
+      name: data.name,
+      owner_name: data.owner,
+      license_key: data.licenseKey,
+      license_type: data.licenseType,
+      expiry_date: data.expiryDate
+    };
+    return await ApiService.createAdminPme(payload);
+  }
+
+  async updatePmeRemote(id: string, data: any) {
+    const payload = {
+      id: id,
+      name: data.name,
+      owner_name: data.owner,
+      license_key: data.licenseKey,
+      license_type: data.licenseType,
+      expiry_date: data.expiryDate
+    };
+    return await ApiService.updateAdminPme(payload);
+  }
+
+  async deletePmeRemote(id: string) {
+    return await ApiService.deleteAdminPme(id);
+  }
+
+  // --- User Management Methods ---
+  async fetchUsers(): Promise<UserProfile[]> {
+    if (!this.currentPmeId) return [];
+    try {
+      const data = await ApiService.getUsers(this.currentPmeId);
+      const users = data.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        role: u.role,
+        pin: u.pin_hash || '',
+        permissions: u.permissions ? JSON.parse(u.permissions) : this.getDefaultPermissions(u.role)
+      }));
+      this.saveUsers(users);
+      return users;
+    } catch (e) {
+      return this.getUsers();
+    }
+  }
+
+  async saveNewUser(user: Partial<UserProfile>) {
+    if (!this.currentPmeId) return;
+    const payload = {
+      id: this.generateUUID(),
+      pme_id: this.currentPmeId,
+      name: user.name,
+      role: user.role,
+      pin_hash: user.pin,
+      permissions: JSON.stringify(user.permissions)
+    };
+    await ApiService.createUser(payload);
+    await this.fetchUsers();
+  }
+
+  // --- Helpers ---
   getSales(): Sale[] { const cache = localStorage.getItem(`cache_sales_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
   getStock(): StockItem[] { const cache = localStorage.getItem(`cache_stock_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
   getCashFlow(): CashFlow[] { const cache = localStorage.getItem(`cache_cash_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
@@ -169,157 +240,77 @@ class StorageService {
     };
     localStorage.setItem(`cache_cash_${this.currentPmeId}`, JSON.stringify([newFlow, ...flows]));
   }
-  
-  // --- Missing methods to fix errors ---
 
-  async fetchCashFlow(): Promise<CashFlow[]> {
-    return this.getCashFlow();
-  }
+  async fetchCashFlow(): Promise<CashFlow[]> { return this.getCashFlow(); }
+  async fetchCredits(): Promise<Credit[]> { return this.getCredits(); }
+  getCredits(): Credit[] { return JSON.parse(localStorage.getItem(`gestoalim_credits_${this.currentPmeId}`) || '[]'); }
 
-  async fetchCredits(): Promise<Credit[]> {
-    return this.getCredits();
-  }
-
-  getCredits(): Credit[] {
-    const data = localStorage.getItem(`gestoalim_credits_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-
-  async repayCredit(id: string, amount: number) {
+  async repayCredit(creditId: string, amount: number) {
     const credits = this.getCredits();
     const updated = credits.map(c => {
-      if (c.id === id) {
+      if (c.id === creditId) {
         const remaining = Math.max(0, c.remainingAmount - amount);
-        const history = [...c.history, { 
-          date: new Date().toISOString(), 
-          amount, 
-          note: 'Remboursement partiel', 
-          authorId: this.getCurrentUser()?.id || 'system' 
-        }];
-        return { ...c, remainingAmount: remaining, status: (remaining === 0 ? 'PAID' : 'PENDING') as 'PAID' | 'PENDING', history };
+        return {
+          ...c,
+          remainingAmount: remaining,
+          status: remaining === 0 ? 'PAID' : 'PENDING',
+          history: [...c.history, {
+            date: new Date().toISOString(),
+            amount,
+            note: 'Remboursement manuel',
+            authorId: this.getCurrentUser()?.id || 'system'
+          }]
+        } as Credit;
       }
       return c;
     });
     localStorage.setItem(`gestoalim_credits_${this.currentPmeId}`, JSON.stringify(updated));
-    this.recordCashFlow(amount, 'IN', 'Remboursement', `Remboursement crédit client`);
-    return null;
+    this.recordCashFlow(amount, 'IN', 'Remboursement', `Crédit client ${creditId}`);
   }
 
-  async fetchInventories(): Promise<InventoryReport[]> {
-    return this.getInventories();
-  }
-
-  getInventories(): InventoryReport[] {
-    const data = localStorage.getItem(`gestoalim_inventory_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-
-  addInventory(report: InventoryReport) {
-    const reports = this.getInventories();
-    localStorage.setItem(`gestoalim_inventory_${this.currentPmeId}`, JSON.stringify([report, ...reports]));
-  }
-
-  updateStock(stock: StockItem[]) {
-    localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(stock));
-  }
-
-  getSubCategories(): SubCategory[] {
-    const data = localStorage.getItem(`nexapme_subcategories_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-
-  saveSubCategories(subs: SubCategory[]) {
-    localStorage.setItem(`nexapme_subcategories_${this.currentPmeId}`, JSON.stringify(subs));
-  }
-
-  getOperations(): Operation[] {
-    const data = localStorage.getItem(`nexapme_operations_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-
-  saveOperations(ops: Operation[]) {
-    localStorage.setItem(`nexapme_operations_${this.currentPmeId}`, JSON.stringify(ops));
-  }
-
-  getAppointments(): Appointment[] {
-    const data = localStorage.getItem(`nexapme_appointments_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-
-  saveAppointments(apps: Appointment[]) {
-    localStorage.setItem(`nexapme_appointments_${this.currentPmeId}`, JSON.stringify(apps));
-  }
-
-  getQuotes(): Quote[] {
-    const data = localStorage.getItem(`nexapme_quotes_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-
-  saveQuotes(quotes: Quote[]) {
-    localStorage.setItem(`nexapme_quotes_${this.currentPmeId}`, JSON.stringify(quotes));
-  }
-
-  async getPmeListRemote(): Promise<PMEEntry[]> {
-    return [];
-  }
-
-  async createPmeRemote(data: any) {
-    return null;
-  }
-
-  async updatePmeRemote(id: string, data: any) {
-    return null;
-  }
-
-  async deletePmeRemote(id: string) {
-    return null;
-  }
+  async fetchInventories(): Promise<InventoryReport[]> { return this.getInventories(); }
+  getInventories(): InventoryReport[] { return JSON.parse(localStorage.getItem(`gestoalim_inventory_${this.currentPmeId}`) || '[]'); }
+  addInventory(report: InventoryReport) { localStorage.setItem(`gestoalim_inventory_${this.currentPmeId}`, JSON.stringify([report, ...this.getInventories()])); }
+  updateStock(stock: StockItem[]) { localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(stock)); }
+  getSubCategories(): SubCategory[] { return JSON.parse(localStorage.getItem(`nexapme_subcategories_${this.currentPmeId}`) || '[]'); }
+  saveSubCategories(subs: SubCategory[]) { localStorage.setItem(`nexapme_subcategories_${this.currentPmeId}`, JSON.stringify(subs)); }
+  getOperations(): Operation[] { return JSON.parse(localStorage.getItem(`nexapme_operations_${this.currentPmeId}`) || '[]'); }
+  saveOperations(ops: Operation[]) { localStorage.setItem(`nexapme_operations_${this.currentPmeId}`, JSON.stringify(ops)); }
+  getAppointments(): Appointment[] { return JSON.parse(localStorage.getItem(`nexapme_appointments_${this.currentPmeId}`) || '[]'); }
+  saveAppointments(apps: Appointment[]) { localStorage.setItem(`nexapme_appointments_${this.currentPmeId}`, JSON.stringify(apps)); }
+  getQuotes(): Quote[] { return JSON.parse(localStorage.getItem(`nexapme_quotes_${this.currentPmeId}`) || '[]'); }
+  saveQuotes(quotes: Quote[]) { localStorage.setItem(`nexapme_quotes_${this.currentPmeId}`, JSON.stringify(quotes)); }
+  getWeeklySalesData() { return []; }
 
   exportAllDataAsJSON() {
-    const data = {
-      stock: this.getStock(),
-      sales: this.getSales(),
-      cash: this.getCashFlow(),
-      inventory: this.getInventories(),
-      credits: this.getCredits(),
-      config: this.getCompanyInfo(),
-      users: this.getUsers(),
-      subCategories: this.getSubCategories(),
-      operations: this.getOperations(),
-      appointments: this.getAppointments(),
-      quotes: this.getQuotes()
-    };
+    const data: any = {};
+    const prefix = `nexapme_`;
+    const altPrefix = `gestoalim_`;
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith(prefix) || key.startsWith(altPrefix))) {
+            data[key] = localStorage.getItem(key);
+        }
+    }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `nexapme_backup_${this.currentPmeId}_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `nexapme_backup_${new Date().toISOString()}.json`;
+    link.click();
   }
 
-  importDataFromJSON(text: string) {
+  importDataFromJSON(json: string) {
     try {
-      const data = JSON.parse(text);
-      if (data.stock) localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(data.stock));
-      if (data.sales) localStorage.setItem(`cache_sales_${this.currentPmeId}`, JSON.stringify(data.sales));
-      if (data.cash) localStorage.setItem(`cache_cash_${this.currentPmeId}`, JSON.stringify(data.cash));
-      if (data.inventory) localStorage.setItem(`gestoalim_inventory_${this.currentPmeId}`, JSON.stringify(data.inventory));
-      if (data.credits) localStorage.setItem(`gestoalim_credits_${this.currentPmeId}`, JSON.stringify(data.credits));
-      if (data.config) localStorage.setItem(`nexapme_${this.currentPmeId}_config`, JSON.stringify(data.config));
-      if (data.users) localStorage.setItem(`nexapme_users_list_${this.currentPmeId}`, JSON.stringify(data.users));
-      if (data.subCategories) localStorage.setItem(`nexapme_subcategories_${this.currentPmeId}`, JSON.stringify(data.subCategories));
-      if (data.operations) localStorage.setItem(`nexapme_operations_${this.currentPmeId}`, JSON.stringify(data.operations));
-      if (data.appointments) localStorage.setItem(`nexapme_appointments_${this.currentPmeId}`, JSON.stringify(data.appointments));
-      if (data.quotes) localStorage.setItem(`nexapme_quotes_${this.currentPmeId}`, JSON.stringify(data.quotes));
-      alert("Importation réussie. Rechargez l'application.");
+      const data = JSON.parse(json);
+      Object.keys(data).forEach(key => {
+        localStorage.setItem(key, data[key]);
+      });
+      alert("Importation réussie. L'application va redémarrer.");
       window.location.reload();
     } catch (e) {
-      alert("Erreur d'importation : fichier JSON invalide.");
+      alert("Erreur lors de l'importation : " + e);
     }
-  }
-
-  getWeeklySalesData() {
-    return [];
   }
 }
 

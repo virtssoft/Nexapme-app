@@ -132,7 +132,8 @@ const Inventory: React.FC = () => {
       type: 'COMPLETE_AUDIT',
       items: reportItems,
       totalLoss: reportItems.reduce((acc, i) => acc + i.lossValue, 0),
-      author: storageService.getUser()
+      // FIX: Changed getUser() to getCurrentUser()?.name
+      author: storageService.getCurrentUser()?.name || 'system'
     };
 
     const updatedStock = stock.map(item => ({ ...item, quantity: counts[item.id] ?? item.quantity }));

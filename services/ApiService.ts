@@ -60,7 +60,6 @@ export class ApiService {
       
       const json = await response.json().catch(() => ({}));
 
-      // Règle d'or de la doc : if (response.error) { ... }
       if (json.error) {
         if (response.status === 401 || json.error.toLowerCase().includes('expire')) {
           localStorage.removeItem('nexapme_jwt');
@@ -94,9 +93,6 @@ export class ApiService {
   static saveProduct(data: any) { 
     return this.request<any>('/stock/create.php', 'POST', data); 
   }
-  static transformStock(data: { source_id: string, target_id: string, quantity: number }) {
-    return this.request<any>('/stock/transform.php', 'POST', data);
-  }
 
   // 3. Ventes
   static createSale(saleData: any) { 
@@ -106,13 +102,31 @@ export class ApiService {
     return this.request<any[]>('/sales/history.php', 'GET', { pme_id }); 
   }
 
-  // 4. Tableau de bord
-  static getStats(pme_id: string) {
-    return this.request<any>('/dashboard/stats.php', 'GET', { pme_id });
+  // 4. Administration PME (ROOT)
+  static getAdminPmes() {
+    return this.request<any[]>('/admin/pme/index.php', 'GET');
+  }
+  static createAdminPme(data: any) {
+    return this.request<any>('/admin/pme/create.php', 'POST', data);
+  }
+  static updateAdminPme(data: any) {
+    return this.request<any>('/admin/pme/update.php', 'POST', data);
+  }
+  static deleteAdminPme(id: string) {
+    return this.request<any>('/admin/pme/delete.php', 'POST', { id });
   }
 
-  // 5. Sauvegarde
-  static exportBackup(pme_id: string) {
-    return this.request<any>('/backup/export.php', 'GET', { pme_id });
+  // 5. Gestion Utilisateurs (Manager)
+  static getUsers(pme_id: string) {
+    return this.request<any[]>('/users/index.php', 'GET', { pme_id });
+  }
+  static createUser(data: any) {
+    return this.request<any>('/users/create.php', 'POST', data);
+  }
+  static updateUser(data: any) {
+    return this.request<any>('/users/update.php', 'POST', data);
+  }
+  static deleteUser(id: string) {
+    return this.request<any>('/users/delete.php', 'POST', { id });
   }
 }

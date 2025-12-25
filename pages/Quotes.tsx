@@ -78,7 +78,8 @@ const Quotes: React.FC = () => {
       marginAmount: totals.marginAmount,
       total: totals.total,
       status: 'DRAFT',
-      author: storageService.getUser()
+      // FIX: Changed getUser() to getCurrentUser()?.name
+      author: storageService.getCurrentUser()?.name || 'system'
     };
 
     const updated = [newQuote, ...quotes];
@@ -336,7 +337,8 @@ const Quotes: React.FC = () => {
                     </div>
                     <div className="p-4 bg-slate-900 text-white rounded-2xl flex items-center space-x-3">
                       <User size={20} className="text-blue-500" />
-                      <p className="text-[10px] font-black uppercase truncate">Auteur: {storageService.getUser()}</p>
+                      {/* FIX: Changed getUser() to getCurrentUser()?.name */}
+                      <p className="text-[10px] font-black uppercase truncate">Auteur: {storageService.getCurrentUser()?.name || 'system'}</p>
                     </div>
                   </div>
                 </div>
