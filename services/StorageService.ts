@@ -96,10 +96,41 @@ class StorageService {
   // --- Auth & Session ---
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
     try {
-      if (key === 'NEXA-DEMO') {
-        return { key, type: 'TRIAL', pmeName: 'Démo nexaPME', idUnique: 'TRIAL_ID' };
+      // 1. Priorité Admin Spéciale
+      if (key === 'nexaPME2025') {
+        const adminLicense: LicenseInfo = {
+          key: 'nexaPME2025',
+          type: 'ADMIN',
+          pmeName: 'ADMINISTRATION CENTRALE',
+          idUnique: 'SYSTEM_ROOT_ADMIN'
+        };
+        localStorage.setItem('nexapme_active_license_info', JSON.stringify(adminLicense));
+        return adminLicense;
       }
+
+      // 2. Mode Essai 7 Jours
+      if (key === 'TRIAL_MODE' || key === 'NEXA-DEMO') {
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 7);
+        const trialLicense: LicenseInfo = { 
+          key: 'NEXA-TRIAL-' + Math.random().toString(36).substr(2, 6).toUpperCase(), 
+          type: 'TRIAL', 
+          pmeName: 'PME en Essai (7 jours)', 
+          idUnique: 'TRIAL_' + Date.now(),
+          expiryDate: expiryDate.toISOString()
+        };
+        localStorage.setItem('nexapme_active_license_info', JSON.stringify(trialLicense));
+        return trialLicense;
+      }
+
+      // 3. Validation Serveur pour les autres licences
       const res = await ApiService.validateLicense(key);
+      
+      // On vérifie si la licence est active
+      if (res.status && res.status !== 'ACTIVE') {
+         throw new Error("Licence inactive.");
+      }
+
       const license: LicenseInfo = {
         key: key,
         idUnique: res.id,
@@ -107,9 +138,11 @@ class StorageService {
         type: res.license_type,
         expiryDate: res.expiry_date
       };
+      
       localStorage.setItem('nexapme_active_license_info', JSON.stringify(license));
       return license;
     } catch (e) {
+      console.error("License Validation Error:", e);
       return null;
     }
   }
@@ -168,7 +201,7 @@ class StorageService {
       license_type: data.licenseType,
       expiry_date: data.expiryDate
     };
-    return await ApiService.updateAdminPme(payload);
+    await ApiService.updateAdminPme(payload);
   }
 
   async deletePmeRemote(id: string) {
