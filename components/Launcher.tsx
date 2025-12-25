@@ -26,8 +26,6 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
     checkStatus();
   }, []);
 
-  const isAdminKey = key.trim() === 'nexaPME2025';
-
   const handleValidate = async (providedKey?: string) => {
     const keyToValidate = providedKey || key.trim();
     if (!keyToValidate) return;
@@ -97,34 +95,24 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
 
             <div className="space-y-3">
               <div className="relative">
-                {isAdminKey ? (
-                  <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-400 animate-pulse" size={18} />
-                ) : (
-                  <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                )}
+                <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                 <input 
                   type="text" 
                   placeholder="Entrez votre clé..."
-                  className={`w-full pl-12 pr-6 py-4 bg-white/5 border-2 rounded-2xl text-white font-bold tracking-widest outline-none transition-all placeholder:text-slate-600 text-sm ${isAdminKey ? 'border-emerald-500/50 focus:border-emerald-400' : 'border-white/10 focus:border-blue-500'}`}
+                  className="w-full pl-12 pr-6 py-4 bg-white/5 border-2 border-white/10 focus:border-blue-500 rounded-2xl text-white font-bold tracking-widest outline-none transition-all placeholder:text-slate-600 text-sm"
                   value={key}
                   onChange={(e) => setKey(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleValidate()}
                 />
               </div>
-              {isAdminKey && (
-                <div className="flex items-center justify-center space-x-2 text-emerald-400 animate-in slide-in-from-top-2">
-                  <CheckCircle size={12} />
-                  <span className="text-[9px] font-black uppercase tracking-widest">Accès Système ROOT Détecté</span>
-                </div>
-              )}
               {error && <p className="text-[9px] font-black text-rose-500 uppercase px-2 text-center animate-pulse">{error}</p>}
               
               <button 
                 onClick={() => handleValidate()}
                 disabled={isValidating || !key}
-                className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center space-x-3 transition-all active:scale-95 disabled:opacity-50 ${isAdminKey ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-900 shadow-emerald-500/20' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20'}`}
+                className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center space-x-3 transition-all active:scale-95 disabled:opacity-50 bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20"
               >
-                {isValidating ? <Loader2 className="animate-spin" size={18} /> : <span>{isAdminKey ? 'Gérer les PME nexaPME' : 'Vérifier la Licence'}</span>}
+                {isValidating ? <Loader2 className="animate-spin" size={18} /> : <span>Vérifier la Licence</span>}
               </button>
             </div>
           </div>

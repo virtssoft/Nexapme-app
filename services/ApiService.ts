@@ -12,15 +12,19 @@ export class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      await fetch(`${API_BASE_URL}/`, { 
-        method: 'GET',
-        mode: 'no-cors', // Permet de passer outre les restrictions CORS pour un simple ping
+      // On teste un endpoint qui est censé être accessible ou la racine
+      await fetch(`${API_BASE_URL}/auth/validate-license.php`, { 
+        method: 'OPTIONS', // Utilise OPTIONS pour un check léger
+        mode: 'cors',
         cache: 'no-cache',
         signal: controller.signal
+      }).catch(() => {
+        // Fallback no-cors si OPTIONS échoue
+        return fetch(`${API_BASE_URL}/`, { method: 'GET', mode: 'no-cors', signal: controller.signal });
       });
       
       clearTimeout(timeoutId);
-      return true; // Si le fetch ne lève pas d'exception, le serveur est vivant
+      return true; 
     } catch (e) {
       console.warn("Nexa Server connectivity check failed", e);
       return false;
@@ -40,7 +44,7 @@ export class ApiService {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // On injecte la clé de licence dans les données
+    // On injecte la clé de licence dans les données pour l'identifier côté serveur
     const requestData = { ...data };
     if (licenseKey && !requestData.license_key) {
       requestData.license_key = licenseKey;
@@ -72,7 +76,6 @@ export class ApiService {
       const response = await fetch(url, options);
       clearTimeout(timeoutId);
       
-      // On tente de lire le JSON
       const json = await response.json().catch(() => ({}));
 
       if (!response.ok) {

@@ -26,46 +26,30 @@ class StorageService {
       // On stocke la clé brute pour l'ApiService
       localStorage.setItem('nexapme_active_license_key', key);
 
-      // 1. CLE ROOT ADMIN : nexaPME2025
-      if (key === 'nexaPME2025') {
-        const adminLicense: LicenseInfo = {
-          key: 'nexaPME2025',
-          type: 'ADMIN',
-          pmeName: 'ROOT ADMINISTRATION',
-          idUnique: 'SYSTEM_ROOT'
-        };
-        localStorage.setItem('nexapme_active_license_info', JSON.stringify(adminLicense));
-        return adminLicense;
-      }
-
-      // 2. MODE ESSAI 7 JOURS
-      if (key === 'TRIAL_MODE') {
-        const expiry = new Date();
-        expiry.setDate(expiry.getDate() + 7);
-        const trialLicense: LicenseInfo = {
-          key: 'NEXA-TRIAL-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
-          type: 'TRIAL',
-          pmeName: 'PME en Essai Gratuit',
-          idUnique: 'TRIAL_' + Date.now(),
-          expiryDate: expiry.toISOString()
-        };
-        localStorage.setItem('nexapme_active_license_info', JSON.stringify(trialLicense));
-        return trialLicense;
-      }
-
-      // 3. VALIDATION SERVEUR (Clés standards)
+      // VALIDATION SERVEUR EXCLUSIVE
       const res = await ApiService.validateLicense(key);
       
-      if (res.status && res.status !== 'ACTIVE') {
-        throw new Error("Cette licence n'est plus active ou est suspendue.");
+      const licenseType = res.license_type; // ADMIN, UNIVERSAL, NORMAL, TRIAL
+      const expiryDate = res.expiry_date;
+
+      // Logique de vérification dynamique basée sur le serveur
+      if (licenseType === 'ADMIN') {
+        // Accès total root, pas de vérification de date
+      } else if (licenseType === 'NORMAL' || licenseType === 'TRIAL') {
+        // Vérification de la date d'expiration pour les licences standards
+        if (expiryDate && new Date(expiryDate) < new Date()) {
+          throw new Error("Cette licence a expiré. Veuillez contacter le support Nexa.");
+        }
+      } else if (licenseType === 'UNIVERSAL') {
+        // Accès illimité sans vérification de date d'expiration
       }
 
       const license: LicenseInfo = {
         key: key,
         idUnique: res.id,
         pmeName: res.name,
-        type: res.license_type,
-        expiryDate: res.expiry_date
+        type: licenseType,
+        expiryDate: expiryDate
       };
       
       localStorage.setItem('nexapme_active_license_info', JSON.stringify(license));
