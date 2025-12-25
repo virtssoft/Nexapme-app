@@ -3,21 +3,26 @@ const API_BASE_URL = 'https://nexaapi.comfortasbl.org/api';
 
 export class ApiService {
   /**
-   * Vérifie la connectivité globale
+   * Vérifie la connectivité globale. 
+   * On utilise 'no-cors' pour éviter que le navigateur bloque le ping si la racine / 
+   * n'est pas configurée pour le CORS, tout en confirmant que le serveur est joignable.
    */
   static async checkStatus(): Promise<boolean> {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-      // On retire no-cors pour avoir un vrai statut si possible
-      const response = await fetch(`${API_BASE_URL}/`, { 
+      
+      await fetch(`${API_BASE_URL}/`, { 
         method: 'GET',
+        mode: 'no-cors', // Permet de passer outre les restrictions CORS pour un simple ping
         cache: 'no-cache',
         signal: controller.signal
       });
+      
       clearTimeout(timeoutId);
-      return response.ok || response.status === 404; // 404 est acceptable car la racine peut ne pas exister
+      return true; // Si le fetch ne lève pas d'exception, le serveur est vivant
     } catch (e) {
+      console.warn("Nexa Server connectivity check failed", e);
       return false;
     }
   }
@@ -35,9 +40,7 @@ export class ApiService {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // On prépare l'objet de données en incluant la clé de licence si disponible
-    // On l'envoie dans le body (POST) ou les params (GET) au lieu d'un header custom
-    // pour éviter les blocages CORS (preflight OPTIONS)
+    // On injecte la clé de licence dans les données
     const requestData = { ...data };
     if (licenseKey && !requestData.license_key) {
       requestData.license_key = licenseKey;
@@ -69,7 +72,12 @@ export class ApiService {
       const response = await fetch(url, options);
       clearTimeout(timeoutId);
       
+      // On tente de lire le JSON
       const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(json.error || json.message || `Erreur serveur (${response.status})`);
+      }
 
       if (json.error) {
         if (response.status === 401 || json.error.toLowerCase().includes('expire')) {
@@ -78,14 +86,12 @@ export class ApiService {
         throw new Error(json.error);
       }
 
-      if (!response.ok) {
-        throw new Error(json.message || `Erreur serveur (${response.status})`);
-      }
-
       return json;
     } catch (error: any) {
-      if (error.name === 'AbortError') throw new Error("Le serveur ne répond pas (Timeout).");
-      if (error.message === 'Failed to fetch') throw new Error("Impossible de contacter le serveur (CORS ou Réseau).");
+      if (error.name === 'AbortError') throw new Error("Le serveur Nexa est trop lent à répondre.");
+      if (error.message === 'Failed to fetch') {
+        throw new Error("Erreur de communication : Le serveur refuse la connexion (CORS) ou vous êtes hors-ligne.");
+      }
       throw error;
     }
   }

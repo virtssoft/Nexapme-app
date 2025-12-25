@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { KeyRound, HelpCircle, Phone, Loader2, Sparkles, Clock, ShieldCheck, CheckCircle } from 'lucide-react';
+import { KeyRound, HelpCircle, Phone, Loader2, Sparkles, Clock, ShieldCheck, CheckCircle, RefreshCw } from 'lucide-react';
 import { storageService } from '../services/StorageService';
 import { ApiService } from '../services/ApiService';
 import { LicenseInfo } from '../types';
@@ -16,8 +16,14 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
   const [showHelp, setShowHelp] = useState(false);
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
 
+  const checkStatus = async () => {
+    const online = await ApiService.checkStatus();
+    setServerOnline(online);
+    return online;
+  };
+
   useEffect(() => {
-    ApiService.checkStatus().then(setServerOnline);
+    checkStatus();
   }, []);
 
   const isAdminKey = key.trim() === 'nexaPME2025';
@@ -30,6 +36,9 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
     setError('');
 
     try {
+      // On re-vérifie le statut avant de valider
+      await checkStatus();
+      
       const license = await storageService.validateLicenseRemote(keyToValidate);
       if (license) {
         onValidated(license);
@@ -58,9 +67,12 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
           <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase leading-none">nexa<span className="text-emerald-500">PME</span></h1>
           <p className="text-slate-400 font-bold text-[9px] md:text-[10px] uppercase tracking-[0.3em]">Cloud Business Solutions</p>
           
-          <div className={`mt-2 inline-flex items-center space-x-2 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${serverOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
+          <div className={`mt-2 inline-flex items-center space-x-2 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border transition-colors ${serverOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
             <div className={`w-1.5 h-1.5 rounded-full ${serverOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
             <span>{serverOnline ? 'Serveur Nexa Connecté' : 'Serveur Nexa Hors-Ligne'}</span>
+            <button onClick={checkStatus} className="ml-1 hover:rotate-180 transition-transform">
+              <RefreshCw size={10} />
+            </button>
           </div>
         </div>
 
