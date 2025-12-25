@@ -113,6 +113,13 @@ class StorageService {
   }
 
   // --- Stock & Sales ---
+  // Added synchronous helper to get stock from cache
+  getStock(): StockItem[] {
+    if (!this.currentPmeId) return [];
+    const cache = localStorage.getItem(`cache_stock_${this.currentPmeId}`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
   async fetchStock(): Promise<StockItem[]> {
     if (!this.currentPmeId) return [];
     try {
@@ -132,8 +139,7 @@ class StorageService {
       localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(stock));
       return stock;
     } catch (e) {
-      const cache = localStorage.getItem(`cache_stock_${this.currentPmeId}`);
-      return cache ? JSON.parse(cache) : [];
+      return this.getStock();
     }
   }
 
@@ -167,17 +173,26 @@ class StorageService {
     localStorage.removeItem(`cache_sales_${this.currentPmeId}`);
   }
 
+  // Added synchronous helper to get sales from cache
+  getSales(): Sale[] {
+    if (!this.currentPmeId) return [];
+    const cache = localStorage.getItem(`cache_sales_${this.currentPmeId}`);
+    return cache ? JSON.parse(cache) : [];
+  }
+
   async fetchSales(): Promise<Sale[]> {
     if (!this.currentPmeId) return [];
     try {
       const data = await ApiService.getSales(this.currentPmeId);
-      return data.map((s: any) => ({
+      const sales = data.map((s: any) => ({
         ...s,
         date: s.sale_date || s.date,
         total: parseFloat(s.total || 0)
       }));
+      localStorage.setItem(`cache_sales_${this.currentPmeId}`, JSON.stringify(sales));
+      return sales;
     } catch (e) {
-      return [];
+      return this.getSales();
     }
   }
 
