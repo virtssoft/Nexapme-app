@@ -43,15 +43,16 @@ const App: React.FC = () => {
       if (storedLicense) {
         setActiveLicense(storedLicense);
         
-        if (storedLicense.type !== 'ADMIN') {
+        if (storedLicense.type === 'ADMIN') {
+          // FORCE ADMIN VIEW
+          setCurrentView(View.ADMIN_SPACE);
+        } else {
           storageService.setActiveCompany(storedLicense.idUnique);
           const config = storageService.getCompanyInfo();
           if (config) setCompanyConfig(config);
           
           const user = storageService.getCurrentUser();
           if (user) setCurrentUser(user);
-        } else {
-          setCurrentView(View.ADMIN_SPACE);
         }
       }
       setTimeout(() => setIsInitializing(false), 2500);
@@ -117,7 +118,12 @@ const App: React.FC = () => {
   }
 
   if (!activeLicense) {
-    return <Launcher onValidated={(license) => triggerSessionLoader(() => setActiveLicense(license))} />;
+    return <Launcher onValidated={(license) => triggerSessionLoader(() => {
+      setActiveLicense(license);
+      if (license.type === 'ADMIN') {
+        setCurrentView(View.ADMIN_SPACE);
+      }
+    })} />;
   }
 
   if (!companyConfig && activeLicense.type !== 'ADMIN') {
@@ -141,17 +147,17 @@ const App: React.FC = () => {
       <Sidebar 
         currentView={currentView} 
         onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }} 
-        user={currentUser || { name: 'Admin', role: 'ADMIN', id: '0', pin: '' }} 
+        user={currentUser || { name: 'Super Admin', role: 'ADMIN', id: '0', pin: '' }} 
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
-        companyName={companyConfig?.name || 'nexaPME'}
+        companyName={companyConfig?.name || 'ROOT ADMIN'}
         onLogout={() => setShowLogoutModal(true)}
         onExitApp={() => setShowLogoutModal(true)}
       />
       
       <header className="lg:hidden bg-slate-900 text-white p-4 flex items-center justify-between sticky top-0 z-40">
         <button onClick={() => setIsSidebarOpen(true)} className="p-2"><Menu size={24} /></button>
-        <Branding companyName={companyConfig?.name || 'nexaPME'} category="Cloud" size="sm" />
+        <Branding companyName={companyConfig?.name || 'nexaPME ROOT'} category="Cloud Control" size="sm" />
         <button onClick={() => setShowLogoutModal(true)} className="p-2 bg-rose-500 rounded-lg"><LogOut size={18} /></button>
       </header>
 
@@ -168,18 +174,20 @@ const App: React.FC = () => {
                 <button onClick={() => setShowLogoutModal(false)}><X size={20} /></button>
              </div>
              <div className="p-8 space-y-4">
-                <button 
-                  onClick={() => handleLogoutOption('SWITCH')}
-                  className="w-full p-6 bg-slate-50 hover:bg-emerald-50 border-2 border-slate-100 hover:border-emerald-500 rounded-3xl transition-all flex items-center space-x-4 group"
-                >
-                  <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                    <User size={24} />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-black text-slate-800 text-sm uppercase">Changer d'utilisateur</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Retour au choix du personnel</p>
-                  </div>
-                </button>
+                {activeLicense?.type !== 'ADMIN' && (
+                  <button 
+                    onClick={() => handleLogoutOption('SWITCH')}
+                    className="w-full p-6 bg-slate-50 hover:bg-emerald-50 border-2 border-slate-100 hover:border-emerald-500 rounded-3xl transition-all flex items-center space-x-4 group"
+                  >
+                    <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                      <User size={24} />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-black text-slate-800 text-sm uppercase">Changer d'utilisateur</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Retour au choix du personnel</p>
+                    </div>
+                  </button>
+                )}
 
                 <button 
                   onClick={() => handleLogoutOption('EXIT')}

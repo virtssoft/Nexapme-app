@@ -34,10 +34,10 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
       if (license) {
         onValidated(license);
       } else {
-        setError('Licence invalide, expirée ou désactivée.');
+        setError('Licence invalide ou désactivée.');
       }
     } catch (e: any) {
-      setError('Erreur de liaison avec le serveur nexaPME.');
+      setError(e.message || 'Erreur de liaison avec le serveur nexaPME.');
     } finally {
       setIsValidating(false);
     }
@@ -102,7 +102,7 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
               {isAdminKey && (
                 <div className="flex items-center justify-center space-x-2 text-emerald-400 animate-in slide-in-from-top-2">
                   <CheckCircle size={12} />
-                  <span className="text-[9px] font-black uppercase tracking-widest">Mode Administrateur Détecté</span>
+                  <span className="text-[9px] font-black uppercase tracking-widest">Accès Système ROOT Détecté</span>
                 </div>
               )}
               {error && <p className="text-[9px] font-black text-rose-500 uppercase px-2 text-center animate-pulse">{error}</p>}
@@ -112,7 +112,7 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
                 disabled={isValidating || !key}
                 className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center space-x-3 transition-all active:scale-95 disabled:opacity-50 ${isAdminKey ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-900 shadow-emerald-500/20' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20'}`}
               >
-                {isValidating ? <Loader2 className="animate-spin" size={18} /> : <span>{isAdminKey ? 'Accéder au Système Root' : 'Vérifier la Licence'}</span>}
+                {isValidating ? <Loader2 className="animate-spin" size={18} /> : <span>{isAdminKey ? 'Gérer les PME nexaPME' : 'Vérifier la Licence'}</span>}
               </button>
             </div>
           </div>
@@ -123,7 +123,7 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
               className="w-full text-slate-500 hover:text-emerald-400 font-black text-[9px] uppercase tracking-widest flex items-center justify-center space-x-2 transition-colors"
             >
               <HelpCircle size={14} />
-              <span>Support nexaPME</span>
+              <span>Besoin d'aide ? Contactez-nous</span>
             </button>
           </div>
         </div>
@@ -131,7 +131,7 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }) => {
         {showHelp && (
           <div className="bg-emerald-500/10 border border-emerald-500/20 p-5 rounded-3xl animate-in slide-in-from-top-4">
             <div className="flex flex-col items-center text-center text-emerald-400">
-              <p className="text-[9px] font-black uppercase tracking-widest mb-1">Support d'activation</p>
+              <p className="text-[9px] font-black uppercase tracking-widest mb-1">Support technique nexaPME</p>
               <p className="text-xl font-black flex items-center gap-2"><Phone size={16}/> +243 993 809 052</p>
             </div>
           </div>

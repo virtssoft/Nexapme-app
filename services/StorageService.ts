@@ -96,39 +96,39 @@ class StorageService {
   // --- Auth & Session ---
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
     try {
-      // 1. Priorité Admin Spéciale
+      // 1. CLE ROOT ADMIN : nexaPME2025
       if (key === 'nexaPME2025') {
         const adminLicense: LicenseInfo = {
           key: 'nexaPME2025',
           type: 'ADMIN',
-          pmeName: 'ADMINISTRATION CENTRALE',
-          idUnique: 'SYSTEM_ROOT_ADMIN'
+          pmeName: 'ROOT ADMINISTRATION',
+          idUnique: 'SYSTEM_ROOT'
         };
         localStorage.setItem('nexapme_active_license_info', JSON.stringify(adminLicense));
         return adminLicense;
       }
 
-      // 2. Mode Essai 7 Jours
-      if (key === 'TRIAL_MODE' || key === 'NEXA-DEMO') {
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 7);
-        const trialLicense: LicenseInfo = { 
-          key: 'NEXA-TRIAL-' + Math.random().toString(36).substr(2, 6).toUpperCase(), 
-          type: 'TRIAL', 
-          pmeName: 'PME en Essai (7 jours)', 
+      // 2. MODE ESSAI 7 JOURS
+      if (key === 'TRIAL_MODE') {
+        const expiry = new Date();
+        expiry.setDate(expiry.getDate() + 7);
+        const trialLicense: LicenseInfo = {
+          key: 'NEXA-TRIAL-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+          type: 'TRIAL',
+          pmeName: 'PME en Essai Gratuit',
           idUnique: 'TRIAL_' + Date.now(),
-          expiryDate: expiryDate.toISOString()
+          expiryDate: expiry.toISOString()
         };
         localStorage.setItem('nexapme_active_license_info', JSON.stringify(trialLicense));
         return trialLicense;
       }
 
-      // 3. Validation Serveur pour les autres licences
+      // 3. VALIDATION SERVEUR (Clés standards)
       const res = await ApiService.validateLicense(key);
       
-      // On vérifie si la licence est active
+      // On vérifie si la licence est "ACTIVE"
       if (res.status && res.status !== 'ACTIVE') {
-         throw new Error("Licence inactive.");
+        throw new Error("Cette licence n'est plus active ou est suspendue.");
       }
 
       const license: LicenseInfo = {
@@ -141,9 +141,9 @@ class StorageService {
       
       localStorage.setItem('nexapme_active_license_info', JSON.stringify(license));
       return license;
-    } catch (e) {
+    } catch (e: any) {
       console.error("License Validation Error:", e);
-      return null;
+      throw e;
     }
   }
 
