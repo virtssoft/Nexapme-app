@@ -23,25 +23,28 @@ class StorageService {
   // --- Auth & Session ---
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
     try {
-      // On stocke la clé brute pour l'ApiService
-      localStorage.setItem('nexapme_active_license_key', key);
+      // Cas spécifique du mode Essai (Onboarding sans clé préalable)
+      if (key === 'TRIAL_MODE') {
+        const trialPlaceholder: LicenseInfo = {
+          key: 'PENDING_TRIAL',
+          type: 'TRIAL',
+          pmeName: 'Nouvelle PME (Essai)',
+          idUnique: 'TEMP_' + Date.now()
+        };
+        // On ne stocke pas encore définitivement, c'est pour l'onboarding
+        return trialPlaceholder;
+      }
 
-      // VALIDATION SERVEUR EXCLUSIVE
+      localStorage.setItem('nexapme_active_license_key', key);
       const res = await ApiService.validateLicense(key);
       
-      const licenseType = res.license_type; // ADMIN, UNIVERSAL, NORMAL, TRIAL
+      const licenseType = res.license_type;
       const expiryDate = res.expiry_date;
 
-      // Logique de vérification dynamique basée sur le serveur
-      if (licenseType === 'ADMIN') {
-        // Accès total root, pas de vérification de date
-      } else if (licenseType === 'NORMAL' || licenseType === 'TRIAL') {
-        // Vérification de la date d'expiration pour les licences standards
+      if (licenseType === 'NORMAL' || licenseType === 'TRIAL') {
         if (expiryDate && new Date(expiryDate) < new Date()) {
           throw new Error("Cette licence a expiré. Veuillez contacter le support Nexa.");
         }
-      } else if (licenseType === 'UNIVERSAL') {
-        // Accès illimité sans vérification de date d'expiration
       }
 
       const license: LicenseInfo = {
@@ -58,6 +61,49 @@ class StorageService {
       console.error("License Validation Error:", e);
       localStorage.removeItem('nexapme_active_license_key');
       throw e;
+    }
+  }
+
+  /**
+   * Enregistre une nouvelle PME (Essai ou Normale) sur le serveur lors de l'onboarding
+   */
+  async registerPmeRemote(data: CompanyConfig, admin: UserProfile, license: LicenseInfo) {
+    try {
+      // 1. Créer la PME sur le serveur
+      const pmePayload = {
+        id: license.idUnique,
+        name: data.name,
+        owner_name: data.owner,
+        license_key: license.key,
+        license_type: license.type,
+        expiry_date: license.expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      };
+      
+      await ApiService.createAdminPme(pmePayload);
+
+      // 2. Créer l'utilisateur manager par défaut
+      const userPayload = {
+        id: admin.id,
+        pme_id: license.idUnique,
+        name: admin.name,
+        role: 'MANAGER',
+        pin_hash: admin.pin,
+        permissions: JSON.stringify(admin.permissions)
+      };
+      
+      await ApiService.createUser(userPayload);
+      
+      // 3. Sauvegarder localement les infos consolidées
+      localStorage.setItem('nexapme_active_license_key', license.key);
+      localStorage.setItem('nexapme_active_license_info', JSON.stringify(license));
+      this.setActiveCompany(license.idUnique);
+      this.saveCompanyInfo(data);
+      this.saveUsers([admin]);
+      this.setCurrentUser(admin);
+      
+      return true;
+    } catch (e: any) {
+      throw new Error("Erreur lors de l'enregistrement distant : " + e.message);
     }
   }
 

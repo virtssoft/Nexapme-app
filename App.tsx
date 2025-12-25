@@ -44,7 +44,6 @@ const App: React.FC = () => {
         setActiveLicense(storedLicense);
         
         if (storedLicense.type === 'ADMIN') {
-          // FORCE ADMIN VIEW
           setCurrentView(View.ADMIN_SPACE);
         } else {
           storageService.setActiveCompany(storedLicense.idUnique);
@@ -126,11 +125,17 @@ const App: React.FC = () => {
     })} />;
   }
 
-  if (!companyConfig && activeLicense.type !== 'ADMIN') {
-    return <Onboarding onComplete={(config) => triggerSessionLoader(() => {
-      setCompanyConfig(config);
-      setCurrentUser(storageService.getCurrentUser());
-    })} />;
+  // Si on a un placeholder de licence (Essai), on lance l'onboarding
+  if ((!companyConfig || activeLicense.key === 'PENDING_TRIAL') && activeLicense.type !== 'ADMIN') {
+    return <Onboarding 
+      onBackToLauncher={() => handleLogoutOption('EXIT')}
+      onComplete={(config) => triggerSessionLoader(() => {
+        setCompanyConfig(config);
+        const storedLicense = storageService.getLicense();
+        if (storedLicense) setActiveLicense(storedLicense);
+        setCurrentUser(storageService.getCurrentUser());
+      })} 
+    />;
   }
 
   if (!currentUser && activeLicense.type !== 'ADMIN') {
@@ -168,7 +173,7 @@ const App: React.FC = () => {
       {/* Modal Déconnexion à Choix */}
       {showLogoutModal && (
         <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95">
+          <div className="bg-white rounded-[2.5rem] w-full max-sm shadow-2xl overflow-hidden animate-in zoom-in-95">
              <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
                 <h3 className="text-xs font-black uppercase tracking-widest">Déconnexion</h3>
                 <button onClick={() => setShowLogoutModal(false)}><X size={20} /></button>
