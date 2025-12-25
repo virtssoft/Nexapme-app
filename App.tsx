@@ -18,10 +18,12 @@ import Login from './pages/Login';
 import Launcher from './components/Launcher';
 import Branding from './components/Branding';
 import { storageService } from './services/StorageService';
-import { Menu, LogOut, ShieldAlert, Loader2, Sparkles } from 'lucide-react';
+import { ApiService } from './services/ApiService';
+import { Menu, LogOut, ShieldAlert, Loader2, Sparkles, Wifi, WifiOff, CheckCircle, AlertCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
+  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
   
   const [activeLicense, setActiveLicense] = useState<LicenseInfo | null>(null);
@@ -33,6 +35,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const restoreSession = async () => {
+      // 1. Vérification PRIORITAIRE de l'API Cloud sur /api/index.php
+      const isOnline = await ApiService.checkStatus();
+      setApiOnline(isOnline);
+
+      // 2. Restauration des données locales
       const storedLicense = storageService.getLicense();
       if (storedLicense) {
         setActiveLicense(storedLicense);
@@ -48,7 +55,9 @@ const App: React.FC = () => {
           setCurrentView(View.ADMIN_SPACE);
         }
       }
-      setTimeout(() => setIsInitializing(false), 2000);
+      
+      // Temps minimum pour apprécier l'écran de splash (et voir le statut API)
+      setTimeout(() => setIsInitializing(false), 3000);
     };
 
     restoreSession();
@@ -94,15 +103,32 @@ const App: React.FC = () => {
             <h1 className="text-6xl font-black text-white tracking-tighter uppercase flex items-center">
               nexa<span className="text-emerald-500">PME</span>
             </h1>
+            
+            {/* Affichage du message de succès ou d'erreur API */}
+            <div className={`mt-6 px-6 py-2.5 rounded-2xl border flex items-center space-x-3 transition-all duration-700 shadow-lg ${
+              apiOnline === null ? 'bg-slate-800/50 border-slate-700 text-slate-400' :
+              apiOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10' :
+              'bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-rose-500/10'
+            }`}>
+              {apiOnline === null ? <Loader2 size={16} className="animate-spin" /> : 
+               apiOnline ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                {apiOnline === null ? 'Vérification de l\'API...' : 
+                 apiOnline ? 'SUCCÈS : Liaison Cloud Établie' : 'ERREUR : Serveur Cloud Inaccessible'}
+              </span>
+            </div>
           </div>
         </div>
-        <div className="flex flex-col items-center space-y-3">
+        
+        <div className="flex flex-col items-center space-y-4">
           <div className="flex space-x-1.5">
-            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce"></div>
           </div>
-          <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.5em]">Initialisation Cloud...</p>
+          <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.5em] animate-pulse">
+            {apiOnline === false ? 'Chargement en mode déconnecté...' : 'Démarrage du système...'}
+          </p>
         </div>
       </div>
     );
@@ -167,10 +193,7 @@ const App: React.FC = () => {
   }
 
   const handleNavigate = (view: View) => {
-    // FIX: Gestion sécurisée des permissions
     const permissions = currentUser.permissions || [];
-    
-    // Si la liste des permissions est vide (bug session), on autorise les vues de base selon le rôle
     if (permissions.length === 0) {
        const defaults = storageService.getDefaultPermissions(currentUser.role);
        if (!defaults.includes(view)) {

@@ -1,5 +1,6 @@
 
 const API_BASE_URL = 'https://nexaapi.comfortasbl.org/api';
+const SERVER_ROOT = 'https://nexaapi.comfortasbl.org';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -9,6 +10,33 @@ export interface ApiResponse<T> {
 }
 
 export class ApiService {
+  /**
+   * Vérifie si le serveur est joignable.
+   * Cible spécifiquement https://nexaapi.comfortasbl.org/api/
+   */
+  static async checkStatus(): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      // On teste la racine du dossier API
+      // Note: L'ajout du '/' final est important pour certains serveurs
+      const response = await fetch(`${API_BASE_URL}/`, { 
+        method: 'GET',
+        mode: 'no-cors', // Crucial pour tester la connectivité sans blocage CORS direct
+        cache: 'no-cache',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      // Si la promesse est résolue, c'est que le serveur a répondu physiquement
+      return true; 
+    } catch (e) {
+      console.warn("[API CHECK] Échec de la connexion à /api/");
+      return false;
+    }
+  }
+
   private static async request<T>(endpoint: string, method: 'GET' | 'POST' = 'GET', data?: any): Promise<T> {
     const token = localStorage.getItem('nexapme_jwt');
     const headers: HeadersInit = {
@@ -23,11 +51,13 @@ export class ApiService {
     const url = new URL(`${API_BASE_URL}${endpoint}`);
     
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const options: RequestInit = {
         method,
         headers,
-        // Ajout d'un timeout pour éviter les attentes infinies en cas de réseau instable
-        signal: AbortSignal.timeout(10000) 
+        signal: controller.signal
       };
 
       if (method === 'POST' && data) {
@@ -41,10 +71,10 @@ export class ApiService {
       }
 
       const response = await fetch(url.toString(), options);
+      clearTimeout(timeoutId);
       
       if (response.status === 401) {
         localStorage.removeItem('nexapme_jwt');
-        // Ne pas recharger brutalement si on est déjà sur la page de login
         if (!window.location.hash.includes('login')) {
            window.location.reload();
         }
@@ -58,12 +88,13 @@ export class ApiService {
 
       return await response.json();
     } catch (error: any) {
-      // Gestion spécifique des erreurs de connexion (Failed to fetch)
-      if (error.name === 'TypeError' || error.message.includes('fetch')) {
-        console.error(`[NETWORK ERROR] ${endpoint}: Impossible de joindre le serveur.`);
-        throw new Error("Erreur de connexion : Le serveur nexaPME est injoignable.");
+      if (error.name === 'AbortError') {
+        throw new Error("Le serveur met trop de temps à répondre (Timeout).");
       }
-      console.error(`[API ERROR] ${endpoint}:`, error.message);
+      if (error.name === 'TypeError' || error.message.includes('fetch')) {
+        console.error(`[NETWORK ERROR] ${endpoint}: Problème de connexion ou CORS.`);
+        throw new Error("Accès refusé par le navigateur ou serveur injoignable. Vérifiez les réglages CORS sur votre API.");
+      }
       throw error;
     }
   }
