@@ -130,6 +130,7 @@ const App: React.FC = () => {
   if (!currentUser && activeLicense.type !== 'ADMIN') {
     return <Login 
       onLogin={(user) => triggerSessionLoader(() => setCurrentUser(user))} 
+      onExit={() => handleLogoutOption('EXIT')}
       companyName={companyConfig?.name || ''} 
       category={companyConfig?.subDomain || "Gestion"} 
     />;
