@@ -87,7 +87,8 @@ const Sales: React.FC = () => {
       paymentType,
       customerName: customer.name,
       customerPhone: customer.phone,
-      author: storageService.getUser(),
+      // Fixed: getUser() -> getCurrentUser()?.name
+      author: storageService.getCurrentUser()?.name || 'system',
       authorId: storageService.getCurrentUser()?.id || 'system',
       cashAmount: paymentType === 'MIXED' ? cashAmount : (paymentType === 'CASH' ? total : 0),
       creditAmount: paymentType === 'MIXED' ? (total - cashAmount) : (paymentType === 'CREDIT' ? total : 0)

@@ -1,13 +1,6 @@
 
 const API_BASE_URL = 'https://nexaapi.comfortasbl.org/api';
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
 export class ApiService {
   /**
    * Vérifie la connectivité globale
@@ -16,14 +9,12 @@ export class ApiService {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-
       const response = await fetch(`${API_BASE_URL}/`, { 
         method: 'GET',
         mode: 'no-cors',
         cache: 'no-cache',
         signal: controller.signal
       });
-      
       clearTimeout(timeoutId);
       return true; 
     } catch (e) {
@@ -67,52 +58,61 @@ export class ApiService {
       const response = await fetch(url.toString(), options);
       clearTimeout(timeoutId);
       
-      if (response.status === 401) {
-        localStorage.removeItem('nexapme_jwt');
-        throw new Error("Session expirée.");
+      const json = await response.json().catch(() => ({}));
+
+      // Règle d'or de la doc : if (response.error) { ... }
+      if (json.error) {
+        if (response.status === 401 || json.error.toLowerCase().includes('expire')) {
+          localStorage.removeItem('nexapme_jwt');
+        }
+        throw new Error(json.error);
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Erreur serveur (${response.status})`);
+        throw new Error(`Erreur serveur (${response.status})`);
       }
 
-      return await response.json();
+      return json;
     } catch (error: any) {
-      if (error.name === 'AbortError') throw new Error("Délai d'attente dépassé (Timeout).");
+      if (error.name === 'AbortError') throw new Error("Le serveur ne répond pas.");
       throw error;
     }
   }
 
-  // --- AUTH ---
-  static validateLicense(key: string) { return this.request<any>('/auth/validate-license.php', 'POST', { license_key: key }); }
-  static login(pme_id: string, user_id: string, pin: string) { return this.request<any>('/auth/login.php', 'POST', { pme_id, user_id, pin }); }
+  // 1. Authentification & Licence
+  static validateLicense(key: string) { 
+    return this.request<any>('/auth/validate-license.php', 'POST', { license_key: key }); 
+  }
+  static login(pme_id: string, user_id: string, pin: string) { 
+    return this.request<any>('/auth/login.php', 'POST', { pme_id, user_id, pin }); 
+  }
 
-  // --- STOCK ---
-  static getStock(pme_id: string) { return this.request<any[]>('/stock/index.php', 'GET', { pme_id }); }
-  static saveProduct(product: any) { return this.request<any>('/stock/save.php', 'POST', product); }
+  // 2. Stock
+  static getStock(pme_id: string) { 
+    return this.request<any[]>('/stock/index.php', 'GET', { pme_id }); 
+  }
+  static saveProduct(data: any) { 
+    return this.request<any>('/stock/create.php', 'POST', data); 
+  }
+  static transformStock(data: { source_id: string, target_id: string, quantity: number }) {
+    return this.request<any>('/stock/transform.php', 'POST', data);
+  }
 
-  // --- SALES ---
-  static createSale(saleData: any) { return this.request<any>('/sales/create.php', 'POST', saleData); }
-  static getSales(pme_id: string, params?: any) { return this.request<any[]>('/sales/history.php', 'GET', { pme_id, ...params }); }
+  // 3. Ventes
+  static createSale(saleData: any) { 
+    return this.request<any>('/sales/create.php', 'POST', saleData); 
+  }
+  static getSales(pme_id: string) { 
+    return this.request<any[]>('/sales/history.php', 'GET', { pme_id }); 
+  }
 
-  // --- FINANCE ---
-  static getCashFlow(pme_id: string) { return this.request<any[]>('/finance/cash.php', 'GET', { pme_id }); }
-  static recordCash(data: any) { return this.request<any>('/finance/cash-record.php', 'POST', data); }
-  static getCredits(pme_id: string) { return this.request<any[]>('/finance/credits.php', 'GET', { pme_id }); }
-  static repayCredit(data: any) { return this.request<any>('/finance/credit-repay.php', 'POST', data); }
+  // 4. Tableau de bord
+  static getStats(pme_id: string) {
+    return this.request<any>('/dashboard/stats.php', 'GET', { pme_id });
+  }
 
-  // --- INVENTORY ---
-  static getInventories(pme_id: string) { return this.request<any[]>('/inventory/get-history.php', 'GET', { pme_id }); }
-  static saveInventory(report: any) { return this.request<any>('/inventory/save-report.php', 'POST', report); }
-
-  // --- USERS MANAGEMENT ---
-  static getUsers(pme_id: string) { return this.request<any[]>('/users/get-users.php', 'GET', { pme_id }); }
-  static saveUser(userData: any) { return this.request<any>('/users/save-user.php', 'POST', userData); }
-  static deleteUser(pme_id: string, user_id: string) { return this.request<any>('/users/delete-user.php', 'POST', { pme_id, user_id }); }
-
-  // --- ADMIN ROOT SPACE ---
-  static getPmes() { return this.request<any[]>('/admin/get-pmes.php', 'GET'); }
-  static savePme(pmeData: any) { return this.request<any>('/admin/save-pme.php', 'POST', pmeData); }
-  static deletePme(id: string) { return this.request<any>('/admin/delete-pme.php', 'POST', { id }); }
+  // 5. Sauvegarde
+  static exportBackup(pme_id: string) {
+    return this.request<any>('/backup/export.php', 'GET', { pme_id });
+  }
 }

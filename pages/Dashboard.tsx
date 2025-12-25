@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CartesianGrid, Tooltip, ResponsiveContainer,
@@ -27,6 +28,7 @@ const Dashboard: React.FC = () => {
   // Refresh dashboard data from API on component mount
   useEffect(() => {
     const refreshData = async () => {
+      // Fixed: storageService.fetchCredits and fetchCashFlow are now async
       await Promise.all([
         storageService.fetchSales().then(setSales),
         storageService.fetchCredits().then(setCredits),

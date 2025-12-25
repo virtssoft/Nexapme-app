@@ -19,12 +19,13 @@ import Launcher from './components/Launcher';
 import Branding from './components/Branding';
 import { storageService } from './services/StorageService';
 import { ApiService } from './services/ApiService';
-import { Menu, LogOut, ShieldAlert, Loader2, Sparkles, Wifi, WifiOff, CheckCircle, AlertCircle } from 'lucide-react';
+import { Menu, LogOut, ShieldAlert, Loader2, Sparkles, CheckCircle, AlertCircle, User, LogOut as ExitIcon, X } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   
   const [activeLicense, setActiveLicense] = useState<LicenseInfo | null>(null);
   const [companyConfig, setCompanyConfig] = useState<CompanyConfig | null>(null);
@@ -35,11 +36,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const restoreSession = async () => {
-      // 1. Vérification PRIORITAIRE de l'API Cloud sur /api/index.php
       const isOnline = await ApiService.checkStatus();
       setApiOnline(isOnline);
 
-      // 2. Restauration des données locales
       const storedLicense = storageService.getLicense();
       if (storedLicense) {
         setActiveLicense(storedLicense);
@@ -55,11 +54,8 @@ const App: React.FC = () => {
           setCurrentView(View.ADMIN_SPACE);
         }
       }
-      
-      // Temps minimum pour apprécier l'écran de splash (et voir le statut API)
-      setTimeout(() => setIsInitializing(false), 3000);
+      setTimeout(() => setIsInitializing(false), 2500);
     };
-
     restoreSession();
   }, []);
 
@@ -68,13 +64,23 @@ const App: React.FC = () => {
     setTimeout(() => {
       callback();
       setIsSwitchingSession(false);
-    }, 1000);
+    }, 800);
   };
 
-  const handleReset = () => {
-    if (confirm("ATTENTION : Cette action supprimera TOUTES les données. Continuer ?")) {
-      storageService.resetAll();
-    }
+  const handleLogoutOption = (type: 'SWITCH' | 'EXIT') => {
+    setShowLogoutModal(false);
+    triggerSessionLoader(() => {
+      if (type === 'SWITCH') {
+        storageService.setCurrentUser(null);
+        setCurrentUser(null);
+        setCurrentView(View.DASHBOARD);
+      } else {
+        storageService.clearLicense();
+        setActiveLicense(null);
+        setCompanyConfig(null);
+        setCurrentUser(null);
+      }
+    });
   };
 
   const renderCurrentView = () => {
@@ -86,7 +92,7 @@ const App: React.FC = () => {
       case View.CREDITS: return <Credits />;
       case View.CASH: return <CashJournal />;
       case View.INVENTORY: return <Inventory />;
-      case View.SETTINGS: return <Settings onReset={handleReset} />;
+      case View.SETTINGS: return <Settings onReset={() => storageService.clearLicense()} />;
       case View.ADMIN_SPACE: return <AdminSpace />;
       default: return <Dashboard />;
     }
@@ -95,187 +101,110 @@ const App: React.FC = () => {
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center animate-in fade-in duration-1000">
-        <div className="relative mb-12">
-          <div className="absolute inset-0 bg-emerald-500/30 blur-[80px] rounded-full animate-pulse"></div>
-          <div className="relative bg-slate-900/50 backdrop-blur-3xl p-12 rounded-[4rem] border border-white/10 shadow-[0_0_50px_rgba(16,185,129,0.1)] flex flex-col items-center overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent animate-shimmer"></div>
-            <Sparkles className="text-emerald-500 mb-6 animate-bounce" size={56} />
-            <h1 className="text-6xl font-black text-white tracking-tighter uppercase flex items-center">
-              nexa<span className="text-emerald-500">PME</span>
-            </h1>
-            
-            {/* Affichage du message de succès ou d'erreur API */}
-            <div className={`mt-6 px-6 py-2.5 rounded-2xl border flex items-center space-x-3 transition-all duration-700 shadow-lg ${
-              apiOnline === null ? 'bg-slate-800/50 border-slate-700 text-slate-400' :
-              apiOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10' :
-              'bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-rose-500/10'
-            }`}>
-              {apiOnline === null ? <Loader2 size={16} className="animate-spin" /> : 
-               apiOnline ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-              <span className="text-[10px] font-black uppercase tracking-[0.2em]">
-                {apiOnline === null ? 'Vérification de l\'API...' : 
-                 apiOnline ? 'SUCCÈS : Liaison Cloud Établie' : 'ERREUR : Serveur Cloud Inaccessible'}
-              </span>
-            </div>
+        <div className="relative mb-12 flex flex-col items-center">
+          <div className="absolute inset-0 bg-emerald-500/20 blur-[100px] rounded-full animate-pulse"></div>
+          <Sparkles className="text-emerald-500 mb-6 animate-bounce" size={64} />
+          <h1 className="text-6xl font-black text-white tracking-tighter uppercase">
+            nexa<span className="text-emerald-500">PME</span>
+          </h1>
+          <div className={`mt-8 px-6 py-2 rounded-full border text-[10px] font-black uppercase tracking-widest flex items-center space-x-3 ${apiOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
+            {apiOnline === null ? <Loader2 size={14} className="animate-spin" /> : apiOnline ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+            <span>{apiOnline === null ? 'Liaison...' : apiOnline ? 'Serveur Cloud OK' : 'Mode Hors-Ligne'}</span>
           </div>
-        </div>
-        
-        <div className="flex flex-col items-center space-y-4">
-          <div className="flex space-x-1.5">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce"></div>
-          </div>
-          <p className="text-slate-500 font-black text-[10px] uppercase tracking-[0.5em] animate-pulse">
-            {apiOnline === false ? 'Chargement en mode déconnecté...' : 'Démarrage du système...'}
-          </p>
         </div>
       </div>
     );
   }
 
   if (!activeLicense) {
-    return <Launcher onValidated={(license) => {
-      triggerSessionLoader(() => {
-        setActiveLicense(license);
-        if (license.type === 'ADMIN') {
-          setCurrentView(View.ADMIN_SPACE);
-        } else {
-          const config = storageService.getCompanyInfo();
-          if (config) setCompanyConfig(config);
-        }
-      });
-    }} />;
+    return <Launcher onValidated={(license) => triggerSessionLoader(() => setActiveLicense(license))} />;
   }
 
-  if (activeLicense.type === 'ADMIN') {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <header className="bg-slate-900 p-6 text-white flex justify-between items-center shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500/20"></div>
-          <div className="flex items-center space-x-3">
-             <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-               <ShieldAlert className="text-emerald-500" size={24} />
-             </div>
-             <div>
-               <h2 className="font-black text-lg uppercase tracking-widest leading-none">ESPACE ROOT</h2>
-               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Console Cloud Management</p>
-             </div>
-          </div>
-          <button 
-            onClick={() => triggerSessionLoader(() => { storageService.clearLicense(); setActiveLicense(null); })} 
-            className="p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-black text-xs uppercase flex items-center space-x-2 transition-all shadow-lg shadow-rose-900/20"
-          >
-            <LogOut size={16} /> <span>Quitter Admin</span>
-          </button>
-        </header>
-        <main className="p-4"><AdminSpace /></main>
-        {isSwitchingSession && <SessionLoader />}
-      </div>
-    );
+  if (!companyConfig && activeLicense.type !== 'ADMIN') {
+    return <Onboarding onComplete={(config) => triggerSessionLoader(() => {
+      setCompanyConfig(config);
+      setCurrentUser(storageService.getCurrentUser());
+    })} />;
   }
 
-  if (!companyConfig) {
-    return <Onboarding onComplete={(config) => {
-      triggerSessionLoader(() => {
-        setCompanyConfig(config);
-        setCurrentUser(storageService.getCurrentUser());
-      });
-    }} />;
-  }
-
-  if (!currentUser) {
+  if (!currentUser && activeLicense.type !== 'ADMIN') {
     return <Login 
       onLogin={(user) => triggerSessionLoader(() => setCurrentUser(user))} 
-      companyName={companyConfig.name} 
-      category={companyConfig.subDomain || "Commerce"} 
+      companyName={companyConfig?.name || ''} 
+      category={companyConfig?.subDomain || "Gestion"} 
     />;
   }
-
-  const handleNavigate = (view: View) => {
-    const permissions = currentUser.permissions || [];
-    if (permissions.length === 0) {
-       const defaults = storageService.getDefaultPermissions(currentUser.role);
-       if (!defaults.includes(view)) {
-         alert("Accès refusé. Cette fonctionnalité ne fait pas partie de vos droits.");
-         return;
-       }
-    } else if (!permissions.includes(view)) {
-      alert("Accès refusé. Veuillez contacter l'administrateur.");
-      return;
-    }
-
-    setCurrentView(view);
-    setIsSidebarOpen(false);
-  };
-
-  const handleLogout = () => {
-    triggerSessionLoader(() => {
-      storageService.setCurrentUser(null);
-      setCurrentUser(null);
-      setCurrentView(View.DASHBOARD);
-    });
-  };
-
-  const handleExitApp = () => {
-    if (confirm("Voulez-vous quitter l'application ?")) {
-      triggerSessionLoader(() => {
-        storageService.clearLicense();
-        setActiveLicense(null);
-        setCompanyConfig(null);
-        setCurrentUser(null);
-      });
-    }
-  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row relative">
       <Sidebar 
         currentView={currentView} 
-        onNavigate={handleNavigate} 
-        user={currentUser} 
+        onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }} 
+        user={currentUser || { name: 'Admin', role: 'ADMIN', id: '0', pin: '' }} 
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
-        companyName={companyConfig.name}
-        onLogout={handleLogout}
-        onExitApp={handleExitApp}
+        companyName={companyConfig?.name || 'nexaPME'}
+        onLogout={() => setShowLogoutModal(true)}
+        onExitApp={() => setShowLogoutModal(true)}
       />
       
-      <header className="lg:hidden bg-slate-900 text-white p-4 flex items-center justify-between sticky top-0 z-40 shadow-md">
-        <div className="flex items-center space-x-3">
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-slate-800 rounded-lg">
-            <Menu size={24} />
-          </button>
-          <Branding companyName={companyConfig.name} category="Cloud PME" size="sm" />
-        </div>
-        <div className="flex items-center space-x-2">
-          <NotificationCenter />
-          <button onClick={handleLogout} className="p-2 bg-rose-500 rounded-xl text-white shadow-lg"><LogOut size={16} /></button>
-        </div>
+      <header className="lg:hidden bg-slate-900 text-white p-4 flex items-center justify-between sticky top-0 z-40">
+        <button onClick={() => setIsSidebarOpen(true)} className="p-2"><Menu size={24} /></button>
+        <Branding companyName={companyConfig?.name || 'nexaPME'} category="Cloud" size="sm" />
+        <button onClick={() => setShowLogoutModal(true)} className="p-2 bg-rose-500 rounded-lg"><LogOut size={18} /></button>
       </header>
 
       <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
-        <div className="max-w-7xl mx-auto">
-          {renderCurrentView()}
-        </div>
+        <div className="max-w-7xl mx-auto">{renderCurrentView()}</div>
       </main>
 
-      {isSwitchingSession && <SessionLoader />}
+      {/* Modal Déconnexion à Choix */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95">
+             <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+                <h3 className="text-xs font-black uppercase tracking-widest">Déconnexion</h3>
+                <button onClick={() => setShowLogoutModal(false)}><X size={20} /></button>
+             </div>
+             <div className="p-8 space-y-4">
+                <button 
+                  onClick={() => handleLogoutOption('SWITCH')}
+                  className="w-full p-6 bg-slate-50 hover:bg-emerald-50 border-2 border-slate-100 hover:border-emerald-500 rounded-3xl transition-all flex items-center space-x-4 group"
+                >
+                  <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                    <User size={24} />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-black text-slate-800 text-sm uppercase">Changer d'utilisateur</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Retour au choix du personnel</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={() => handleLogoutOption('EXIT')}
+                  className="w-full p-6 bg-slate-50 hover:bg-rose-50 border-2 border-slate-100 hover:border-rose-500 rounded-3xl transition-all flex items-center space-x-4 group"
+                >
+                  <div className="p-3 bg-rose-100 text-rose-600 rounded-2xl group-hover:bg-rose-600 group-hover:text-white transition-all">
+                    <ExitIcon size={24} />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-black text-slate-800 text-sm uppercase">Quitter l'entreprise</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Retour à l'accueil licence</p>
+                  </div>
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {isSwitchingSession && (
+        <div className="fixed inset-0 z-[110] bg-slate-950/60 backdrop-blur-xl flex items-center justify-center">
+          <Loader2 className="animate-spin text-emerald-500" size={48} />
+        </div>
+      )}
       <Chatbot />
     </div>
   );
 };
-
-const SessionLoader = () => (
-  <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-xl flex flex-col items-center justify-center animate-in fade-in duration-300">
-    <div className="bg-slate-900 p-12 rounded-[3.5rem] border border-white/10 shadow-[0_0_80px_rgba(0,0,0,0.5)] flex flex-col items-center">
-       <div className="relative mb-8">
-         <div className="absolute inset-0 bg-emerald-500/20 blur-2xl rounded-full animate-pulse"></div>
-         <Loader2 className="animate-spin text-emerald-500 relative z-10" size={56} />
-       </div>
-       <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] animate-pulse">Traitement Cloud...</p>
-    </div>
-  </div>
-);
 
 export default App;
