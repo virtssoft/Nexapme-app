@@ -1,6 +1,5 @@
 
 const API_BASE_URL = 'https://nexaapi.comfortasbl.org/api';
-const SERVER_ROOT = 'https://nexaapi.comfortasbl.org';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -11,28 +10,23 @@ export interface ApiResponse<T> {
 
 export class ApiService {
   /**
-   * Vérifie si le serveur est joignable.
-   * Cible spécifiquement https://nexaapi.comfortasbl.org/api/
+   * Vérifie la connectivité globale
    */
   static async checkStatus(): Promise<boolean> {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      // On teste la racine du dossier API
-      // Note: L'ajout du '/' final est important pour certains serveurs
       const response = await fetch(`${API_BASE_URL}/`, { 
         method: 'GET',
-        mode: 'no-cors', // Crucial pour tester la connectivité sans blocage CORS direct
+        mode: 'no-cors',
         cache: 'no-cache',
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
-      // Si la promesse est résolue, c'est que le serveur a répondu physiquement
       return true; 
     } catch (e) {
-      console.warn("[API CHECK] Échec de la connexion à /api/");
       return false;
     }
   }
@@ -52,7 +46,7 @@ export class ApiService {
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       const options: RequestInit = {
         method,
@@ -75,9 +69,6 @@ export class ApiService {
       
       if (response.status === 401) {
         localStorage.removeItem('nexapme_jwt');
-        if (!window.location.hash.includes('login')) {
-           window.location.reload();
-        }
         throw new Error("Session expirée.");
       }
 
@@ -88,32 +79,40 @@ export class ApiService {
 
       return await response.json();
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        throw new Error("Le serveur met trop de temps à répondre (Timeout).");
-      }
-      if (error.name === 'TypeError' || error.message.includes('fetch')) {
-        console.error(`[NETWORK ERROR] ${endpoint}: Problème de connexion ou CORS.`);
-        throw new Error("Accès refusé par le navigateur ou serveur injoignable. Vérifiez les réglages CORS sur votre API.");
-      }
+      if (error.name === 'AbortError') throw new Error("Délai d'attente dépassé (Timeout).");
       throw error;
     }
   }
 
-  // Auth
+  // --- AUTH ---
   static validateLicense(key: string) { return this.request<any>('/auth/validate-license.php', 'POST', { license_key: key }); }
   static login(pme_id: string, user_id: string, pin: string) { return this.request<any>('/auth/login.php', 'POST', { pme_id, user_id, pin }); }
 
-  // Stock
+  // --- STOCK ---
   static getStock(pme_id: string) { return this.request<any[]>('/stock/index.php', 'GET', { pme_id }); }
   static saveProduct(product: any) { return this.request<any>('/stock/save.php', 'POST', product); }
 
-  // Sales
+  // --- SALES ---
   static createSale(saleData: any) { return this.request<any>('/sales/create.php', 'POST', saleData); }
   static getSales(pme_id: string, params?: any) { return this.request<any[]>('/sales/history.php', 'GET', { pme_id, ...params }); }
 
-  // Finance
+  // --- FINANCE ---
   static getCashFlow(pme_id: string) { return this.request<any[]>('/finance/cash.php', 'GET', { pme_id }); }
   static recordCash(data: any) { return this.request<any>('/finance/cash-record.php', 'POST', data); }
   static getCredits(pme_id: string) { return this.request<any[]>('/finance/credits.php', 'GET', { pme_id }); }
   static repayCredit(data: any) { return this.request<any>('/finance/credit-repay.php', 'POST', data); }
+
+  // --- INVENTORY ---
+  static getInventories(pme_id: string) { return this.request<any[]>('/inventory/get-history.php', 'GET', { pme_id }); }
+  static saveInventory(report: any) { return this.request<any>('/inventory/save-report.php', 'POST', report); }
+
+  // --- USERS MANAGEMENT ---
+  static getUsers(pme_id: string) { return this.request<any[]>('/users/get-users.php', 'GET', { pme_id }); }
+  static saveUser(userData: any) { return this.request<any>('/users/save-user.php', 'POST', userData); }
+  static deleteUser(pme_id: string, user_id: string) { return this.request<any>('/users/delete-user.php', 'POST', { pme_id, user_id }); }
+
+  // --- ADMIN ROOT SPACE ---
+  static getPmes() { return this.request<any[]>('/admin/get-pmes.php', 'GET'); }
+  static savePme(pmeData: any) { return this.request<any>('/admin/save-pme.php', 'POST', pmeData); }
+  static deletePme(id: string) { return this.request<any>('/admin/delete-pme.php', 'POST', { id }); }
 }

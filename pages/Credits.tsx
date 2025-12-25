@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { storageService } from '../services/StorageService';
 import { Credit } from '../types';
 import { Search, ChevronRight, CheckCircle2, History, User, Wallet } from 'lucide-react';
@@ -10,15 +9,21 @@ const Credits: React.FC = () => {
   const [selectedCredit, setSelectedCredit] = useState<Credit | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
 
+  // Fetch fresh credits on component mount to populate local cache
+  useEffect(() => {
+    storageService.fetchCredits().then(data => setCredits(data));
+  }, []);
+
   const filteredCredits = credits.filter(c => 
     c.customerName.toLowerCase().includes(searchTerm.toLowerCase()) && c.status === 'PENDING'
   );
 
-  const handlePayment = () => {
+  // Handle payment asynchronously to ensure cache is updated before refreshing local state
+  const handlePayment = async () => {
     if (!selectedCredit || paymentAmount <= 0) return;
     
-    storageService.repayCredit(selectedCredit.id, paymentAmount);
-    setCredits(storageService.getCredits()); // Refresh local state
+    await storageService.repayCredit(selectedCredit.id, paymentAmount);
+    setCredits(storageService.getCredits()); // Refresh local state from updated cache
     
     setSelectedCredit(null);
     setPaymentAmount(0);

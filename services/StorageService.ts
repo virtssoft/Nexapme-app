@@ -1,4 +1,3 @@
-
 import { StockItem, Sale, Credit, CashFlow, InventoryReport, CompanyConfig, UserProfile, LicenseInfo, PMEEntry, Operation, Appointment, Quote, SubCategory, View } from '../types';
 import { ApiService } from './ApiService';
 
@@ -16,7 +15,6 @@ class StorageService {
 
   getActiveCompanyId() { return this.currentPmeId; }
 
-  // --- Permissions Helper ---
   getDefaultPermissions(role: string): View[] {
     if (role === 'MANAGER' || role === 'ADMIN') {
       return Object.values(View) as View[];
@@ -24,7 +22,7 @@ class StorageService {
     return [View.DASHBOARD, View.SALES, View.STOCK, View.HISTORY];
   }
 
-  // --- Stock Management ---
+  // --- Stock ---
   async fetchStock(): Promise<StockItem[]> {
     if (!this.currentPmeId) return [];
     try {
@@ -59,7 +57,7 @@ class StorageService {
     localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(stock));
   }
 
-  // --- Sales Operations ---
+  // --- Sales ---
   async addSale(sale: Sale) {
     const payload = { ...sale, pme_id: this.currentPmeId };
     await ApiService.createSale(payload);
@@ -94,7 +92,7 @@ class StorageService {
     });
   }
 
-  // --- Financial Tracking ---
+  // --- Finance ---
   async fetchCashFlow(): Promise<CashFlow[]> {
     if (!this.currentPmeId) return [];
     try {
@@ -114,71 +112,88 @@ class StorageService {
     return await ApiService.recordCash(payload);
   }
 
+  // Caching credits for synchronous access and resolving missing property error
   async fetchCredits(): Promise<Credit[]> {
     if (!this.currentPmeId) return [];
     try {
-      return await ApiService.getCredits(this.currentPmeId);
-    } catch (e) { return []; }
+      const data = await ApiService.getCredits(this.currentPmeId);
+      localStorage.setItem(`cache_credits_${this.currentPmeId}`, JSON.stringify(data));
+      return data;
+    } catch (e) {
+      return this.getCredits();
+    }
+  }
+
+  getCredits(): Credit[] {
+    const cache = localStorage.getItem(`cache_credits_${this.currentPmeId}`);
+    return cache ? JSON.parse(cache) : [];
   }
 
   async repayCredit(id: string, amount: number) {
-    return await ApiService.repayCredit({ credit_id: id, amount, author: this.getUser() });
+    const res = await ApiService.repayCredit({ credit_id: id, amount, author: this.getUser() });
+    await this.fetchCredits(); // Refresh the local cache after repayment
+    return res;
   }
 
-  // --- Inventory Audits ---
+  // --- Inventory ---
+  async fetchInventories(): Promise<InventoryReport[]> {
+    if (!this.currentPmeId) return [];
+    try {
+      const data = await ApiService.getInventories(this.currentPmeId);
+      localStorage.setItem(`gestoalim_inventory_${this.currentPmeId}`, JSON.stringify(data));
+      return data;
+    } catch (e) {
+      const cache = localStorage.getItem(`gestoalim_inventory_${this.currentPmeId}`);
+      return cache ? JSON.parse(cache) : [];
+    }
+  }
+
+  async addInventory(report: InventoryReport) {
+    const payload = { ...report, pme_id: this.currentPmeId };
+    await ApiService.saveInventory(payload);
+    await this.fetchInventories();
+  }
+
   getInventories(): InventoryReport[] {
     const data = localStorage.getItem(`gestoalim_inventory_${this.currentPmeId}`);
     return data ? JSON.parse(data) : [];
   }
 
-  addInventory(report: InventoryReport) {
-    const reports = this.getInventories();
-    const updated = [report, ...reports];
-    localStorage.setItem(`gestoalim_inventory_${this.currentPmeId}`, JSON.stringify(updated));
+  // --- Users ---
+  async fetchUsers(): Promise<UserProfile[]> {
+    if (!this.currentPmeId) return [];
+    try {
+      const data = await ApiService.getUsers(this.currentPmeId);
+      localStorage.setItem(`nexapme_users_list_${this.currentPmeId}`, JSON.stringify(data));
+      return data;
+    } catch (e) {
+      return this.getUsers();
+    }
   }
 
-  // --- Modules Getters ---
-  getOperations(): Operation[] {
-    const data = localStorage.getItem(`nexapme_operations_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-  saveOperations(ops: Operation[]) {
-    localStorage.setItem(`nexapme_operations_${this.currentPmeId}`, JSON.stringify(ops));
-  }
-  getAppointments(): Appointment[] {
-    const data = localStorage.getItem(`nexapme_appointments_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-  saveAppointments(apps: Appointment[]) {
-    localStorage.setItem(`nexapme_appointments_${this.currentPmeId}`, JSON.stringify(apps));
-  }
-  getQuotes(): Quote[] {
-    const data = localStorage.getItem(`nexapme_quotes_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-  saveQuotes(quotes: Quote[]) {
-    localStorage.setItem(`nexapme_quotes_${this.currentPmeId}`, JSON.stringify(quotes));
-  }
   getUsers(): UserProfile[] {
     const data = localStorage.getItem(`nexapme_users_list_${this.currentPmeId}`);
     return data ? JSON.parse(data) : [];
   }
-  saveUsers(users: UserProfile[]) {
+
+  async saveUsers(users: UserProfile[]) {
+    // Dans une API réelle, on enverrait l'utilisateur créé individuellement
+    // Ici on garde la logique de liste pour la compatibilité
     localStorage.setItem(`nexapme_users_list_${this.currentPmeId}`, JSON.stringify(users));
   }
-  getSubCategories(): SubCategory[] {
-    const data = localStorage.getItem(`nexapme_subcategories_${this.currentPmeId}`);
-    return data ? JSON.parse(data) : [];
-  }
-  saveSubCategories(subs: SubCategory[]) {
-    localStorage.setItem(`nexapme_subcategories_${this.currentPmeId}`, JSON.stringify(subs));
-  }
+
+  // --- Modules Getters ---
+  getOperations(): Operation[] { return JSON.parse(localStorage.getItem(`nexapme_operations_${this.currentPmeId}`) || '[]'); }
+  saveOperations(ops: Operation[]) { localStorage.setItem(`nexapme_operations_${this.currentPmeId}`, JSON.stringify(ops)); }
+  getAppointments(): Appointment[] { return JSON.parse(localStorage.getItem(`nexapme_appointments_${this.currentPmeId}`) || '[]'); }
+  saveAppointments(apps: Appointment[]) { localStorage.setItem(`nexapme_appointments_${this.currentPmeId}`, JSON.stringify(apps)); }
+  getQuotes(): Quote[] { return JSON.parse(localStorage.getItem(`nexapme_quotes_${this.currentPmeId}`) || '[]'); }
+  saveQuotes(quotes: Quote[]) { localStorage.setItem(`nexapme_quotes_${this.currentPmeId}`, JSON.stringify(quotes)); }
+  getSubCategories(): SubCategory[] { return JSON.parse(localStorage.getItem(`nexapme_subcategories_${this.currentPmeId}`) || '[]'); }
+  saveSubCategories(subs: SubCategory[]) { localStorage.setItem(`nexapme_subcategories_${this.currentPmeId}`, JSON.stringify(subs)); }
 
   // --- Session & Auth ---
-  getUser(): string {
-    const user = this.getCurrentUser();
-    return user ? user.name : 'Système';
-  }
+  getUser(): string { const user = this.getCurrentUser(); return user ? user.name : 'Système'; }
 
   getCurrentUser(): UserProfile | null {
     const data = localStorage.getItem('nexapme_current_session');
@@ -187,10 +202,7 @@ class StorageService {
 
   setCurrentUser(user: UserProfile | null) {
     if (user) {
-      // Sécurité : s'assurer que les permissions sont présentes lors de la sauvegarde
-      if (!user.permissions || user.permissions.length === 0) {
-        user.permissions = this.getDefaultPermissions(user.role);
-      }
+      if (!user.permissions || user.permissions.length === 0) user.permissions = this.getDefaultPermissions(user.role);
       localStorage.setItem('nexapme_current_session', JSON.stringify(user));
     } else {
       localStorage.removeItem('nexapme_current_session');
@@ -204,21 +216,15 @@ class StorageService {
 
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
     try {
-      // Mode de secours local immédiat pour la démo
       if (key === 'TRIAL_MODE' || key === 'NEXA-DEMO') {
         const trial: LicenseInfo = { key, type: 'TRIAL', pmeName: 'Démo nexaPME', idUnique: 'TRIAL_ID' };
         localStorage.setItem('nexapme_active_license_info', JSON.stringify(trial));
         return trial;
       }
-      
       const res = await ApiService.validateLicense(key);
-      if (res) {
-        localStorage.setItem('nexapme_active_license_info', JSON.stringify(res));
-        return res;
-      }
-      return null;
+      localStorage.setItem('nexapme_active_license_info', JSON.stringify(res));
+      return res;
     } catch (e) {
-      console.warn("Validation API échouée, vérification du cache local...");
       const local = this.getLicense();
       if (local && local.key === key) return local;
       return null;
@@ -228,8 +234,6 @@ class StorageService {
   async loginRemote(pme_id: string, user_id: string, pin: string) {
     const res = await ApiService.login(pme_id, user_id, pin);
     localStorage.setItem('nexapme_jwt', res.token);
-    
-    // FIX: Attribution des permissions lors de la connexion
     const user: UserProfile = { 
       id: res.user.id, 
       name: res.user.name, 
@@ -237,30 +241,27 @@ class StorageService {
       pin: '',
       permissions: this.getDefaultPermissions(res.user.role)
     };
-    
     this.setCurrentUser(user);
     return { user, token: res.token };
   }
 
   // --- Admin Methods ---
   async getPmeListRemote(): Promise<PMEEntry[]> {
-    const local = localStorage.getItem('nexapme_pme_list_root');
-    return local ? JSON.parse(local) : [];
+    try {
+      return await ApiService.getPmes();
+    } catch (e) {
+      const local = localStorage.getItem('nexapme_pme_list_root');
+      return local ? JSON.parse(local) : [];
+    }
   }
   async createPmeRemote(data: Partial<PMEEntry>) {
-    const pme = { ...data, idUnique: data.idUnique || 'PME-' + Math.random().toString(36).substr(2, 6).toUpperCase(), createdAt: new Date().toISOString() } as PMEEntry;
-    const list = await this.getPmeListRemote();
-    localStorage.setItem('nexapme_pme_list_root', JSON.stringify([pme, ...list]));
+    return await ApiService.savePme(data);
   }
   async updatePmeRemote(id: string, data: Partial<PMEEntry>) {
-    const list = await this.getPmeListRemote();
-    const updated = list.map(p => p.idUnique === id ? { ...p, ...data } : p);
-    localStorage.setItem('nexapme_pme_list_root', JSON.stringify(updated));
+    return await ApiService.savePme({ ...data, idUnique: id });
   }
   async deletePmeRemote(id: string) {
-    const list = await this.getPmeListRemote();
-    const updated = list.filter(p => p.idUnique !== id);
-    localStorage.setItem('nexapme_pme_list_root', JSON.stringify(updated));
+    return await ApiService.deletePme(id);
   }
 
   // --- Utilities ---
@@ -282,7 +283,6 @@ class StorageService {
     try {
       const data = JSON.parse(json);
       Object.keys(data).forEach(key => localStorage.setItem(key, data[key]));
-      alert("Données importées avec succès !");
       window.location.reload();
     } catch (e) { alert("Erreur d'importation"); }
   }
@@ -298,7 +298,6 @@ class StorageService {
   getStock(): StockItem[] { const cache = localStorage.getItem(`cache_stock_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
   getSales(): Sale[] { const cache = localStorage.getItem(`cache_sales_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
   getCashBalance(): number { const flows = this.getCashFlow(); return flows.reduce((acc, f) => f.type === 'IN' ? acc + f.amount : acc - f.amount, 0); }
-  getCredits(): Credit[] { return []; }
 }
 
 export const storageService = new StorageService();

@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, XAxis, YAxis
@@ -16,13 +15,27 @@ const Dashboard: React.FC = () => {
   const user = storageService.getCurrentUser();
   const isManager = user?.role === 'MANAGER';
   
-  const sales = storageService.getSales();
-  const credits = storageService.getCredits();
-  const cashBalance = storageService.getCashBalance();
-  const stock = storageService.getStock();
+  // Local state for dashboard data initialized from cache
+  const [sales, setSales] = useState(storageService.getSales());
+  const [credits, setCredits] = useState(storageService.getCredits());
+  const [cashBalance, setCashBalance] = useState(storageService.getCashBalance());
+  const [stock, setStock] = useState(storageService.getStock());
 
   const [rate, setRate] = useState(storageService.getExchangeRate());
   const [isEditingRate, setIsEditingRate] = useState(false);
+
+  // Refresh dashboard data from API on component mount
+  useEffect(() => {
+    const refreshData = async () => {
+      await Promise.all([
+        storageService.fetchSales().then(setSales),
+        storageService.fetchCredits().then(setCredits),
+        storageService.fetchCashFlow().then(() => setCashBalance(storageService.getCashBalance())),
+        storageService.fetchStock().then(setStock)
+      ]);
+    };
+    refreshData();
+  }, []);
 
   const totalCreditsPending = credits
     .filter(c => c.status === 'PENDING')
