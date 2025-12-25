@@ -9,20 +9,20 @@ export class ApiService {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
+      // On retire no-cors pour avoir un vrai statut si possible
       const response = await fetch(`${API_BASE_URL}/`, { 
         method: 'GET',
-        mode: 'no-cors',
         cache: 'no-cache',
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      return true; 
+      return response.ok || response.status === 404; // 404 est acceptable car la racine peut ne pas exister
     } catch (e) {
       return false;
     }
   }
 
-  private static async request<T>(endpoint: string, method: 'GET' | 'POST' = 'GET', data?: any): Promise<T> {
+  private static async request<T>(endpoint: string, method: 'GET' | 'POST' = 'GET', data: any = {}): Promise<T> {
     const token = localStorage.getItem('nexapme_jwt');
     const licenseKey = localStorage.getItem('nexapme_active_license_key');
     
@@ -31,39 +31,42 @@ export class ApiService {
       'Accept': 'application/json'
     };
     
-    // Priorité au JWT pour les sessions utilisateurs normales
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // Toujours envoyer la clé de licence si présente (utile pour les routes Admin)
-    if (licenseKey) {
-      headers['X-License-Key'] = licenseKey;
+    // On prépare l'objet de données en incluant la clé de licence si disponible
+    // On l'envoie dans le body (POST) ou les params (GET) au lieu d'un header custom
+    // pour éviter les blocages CORS (preflight OPTIONS)
+    const requestData = { ...data };
+    if (licenseKey && !requestData.license_key) {
+      requestData.license_key = licenseKey;
     }
 
-    const url = new URL(`${API_BASE_URL}${endpoint}`);
+    let url = `${API_BASE_URL}${endpoint}`;
+    const options: RequestInit = {
+      method,
+      headers
+    };
+
+    if (method === 'POST') {
+      options.body = JSON.stringify(requestData);
+    } else {
+      const urlObj = new URL(url);
+      Object.keys(requestData).forEach(key => {
+        if (requestData[key] !== undefined && requestData[key] !== null) {
+          urlObj.searchParams.append(key, String(requestData[key]));
+        }
+      });
+      url = urlObj.toString();
+    }
     
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
+      options.signal = controller.signal;
 
-      const options: RequestInit = {
-        method,
-        headers,
-        signal: controller.signal
-      };
-
-      if (method === 'POST' && data) {
-        options.body = JSON.stringify(data);
-      } else if (method === 'GET' && data) {
-        Object.keys(data).forEach(key => {
-          if (data[key] !== undefined && data[key] !== null) {
-            url.searchParams.append(key, String(data[key]));
-          }
-        });
-      }
-
-      const response = await fetch(url.toString(), options);
+      const response = await fetch(url, options);
       clearTimeout(timeoutId);
       
       const json = await response.json().catch(() => ({}));
@@ -81,7 +84,8 @@ export class ApiService {
 
       return json;
     } catch (error: any) {
-      if (error.name === 'AbortError') throw new Error("Le serveur ne répond pas.");
+      if (error.name === 'AbortError') throw new Error("Le serveur ne répond pas (Timeout).");
+      if (error.message === 'Failed to fetch') throw new Error("Impossible de contacter le serveur (CORS ou Réseau).");
       throw error;
     }
   }

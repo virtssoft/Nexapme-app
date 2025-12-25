@@ -36,9 +36,14 @@ const AdminSpace: React.FC = () => {
 
   const loadPmes = async () => {
     setIsLoading(true);
-    const data = await storageService.getPmeListRemote();
-    setPmeList(data);
-    setIsLoading(false);
+    try {
+      const data = await storageService.getPmeListRemote();
+      setPmeList(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Failed to load PMES", e);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const copyToClipboard = (key: string) => {
@@ -78,9 +83,9 @@ const AdminSpace: React.FC = () => {
       }
       await loadPmes();
       setIsModalOpen(false);
-      alert("PME enregistrée avec succès sur le serveur !");
+      alert("Opération réussie !");
     } catch (e: any) {
-      alert("Erreur serveur : " + e.message);
+      alert("Échec de l'opération : " + (e.message || "Erreur inconnue"));
     } finally {
       setIsLoading(false);
     }
@@ -99,6 +104,12 @@ const AdminSpace: React.FC = () => {
       }
     }
   };
+
+  const filteredPmes = pmeList.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.owner.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.licenseKey.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-6 pb-20 max-w-7xl mx-auto p-3 md:p-10 animate-in fade-in duration-500">
@@ -148,11 +159,7 @@ const AdminSpace: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
-          {pmeList.filter(p => 
-            p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            p.owner.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.licenseKey.toLowerCase().includes(searchTerm.toLowerCase())
-          ).map(p => (
+          {filteredPmes.map(p => (
             <div key={p.idUnique} className="bg-white rounded-[2rem] md:rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden group flex flex-col hover:border-emerald-500 transition-all hover:shadow-2xl">
                <div className="p-6 md:p-8 space-y-4 md:space-y-6 flex-1">
                   <div className="flex justify-between items-start">
