@@ -39,19 +39,23 @@ class StorageService {
         throw new Error(`Cette licence a expiré.`);
       }
 
-      // 1. Sauvegarde des infos de la PME récupérées du Cloud
+      // 1. Sauvegarde des infos COMPLÈTES de la PME récupérées du Cloud
       const companyInfo: CompanyConfig = {
         idUnique: foundPme.id,
         name: foundPme.name,
         owner: foundPme.owner_name,
-        currency: 'FC',
-        setupDate: foundPme.created_at || new Date().toISOString()
+        currency: (foundPme.currency || 'FC') as 'FC' | 'USD',
+        setupDate: foundPme.created_at || new Date().toISOString(),
+        address: foundPme.address || '',
+        phone: foundPme.phone || '',
+        email: foundPme.email || '',
+        bankDetails: foundPme.bank_details || ''
       };
       
       this.setActiveCompany(foundPme.id);
       this.saveCompanyInfo(companyInfo);
 
-      // 2. Récupération immédiate des utilisateurs (Gérant + Travailleurs) créés par l'admin
+      // 2. Récupération immédiate des utilisateurs créés par l'admin
       try {
         const remoteUsers = await ApiService.getUsers(foundPme.id);
         if (remoteUsers && Array.isArray(remoteUsers)) {
@@ -65,7 +69,7 @@ class StorageService {
           this.saveUsers(mappedUsers);
         }
       } catch (e) {
-        console.warn("Impossible de charger les utilisateurs distants.");
+        console.warn("Erreur chargement utilisateurs Cloud.");
       }
 
       const license: LicenseInfo = {
