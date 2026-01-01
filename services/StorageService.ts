@@ -23,31 +23,23 @@ class StorageService {
   // --- Auth & Session ---
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
     try {
-      if (key === 'TRIAL_MODE') {
-        return {
-          key: 'PENDING_TRIAL',
-          type: 'TRIAL',
-          pmeName: 'Nouvelle PME',
-          idUnique: 'TEMP_' + Date.now()
-        };
-      }
-
       const allPmes = await ApiService.getAdminPmes();
       const foundPme = allPmes.find((p: any) => p.license_key === key);
 
       if (!foundPme) {
-        throw new Error("Clé de licence introuvable dans la base nexaPME.");
+        throw new Error("Clé de licence introuvable. Contactez l'administrateur.");
       }
 
       if (foundPme.status !== 'ACTIVE') {
-        throw new Error("Cette licence est suspendue. Contactez le support.");
+        throw new Error("Cette licence est suspendue.");
       }
 
       const expiry = foundPme.expiry_date;
       if (expiry && new Date(expiry) < new Date()) {
-        throw new Error(`Cette licence a expiré le ${new Date(expiry).toLocaleDateString()}.`);
+        throw new Error(`Cette licence a expiré.`);
       }
 
+      // 1. Sauvegarde des infos de la PME récupérées du Cloud
       const companyInfo: CompanyConfig = {
         idUnique: foundPme.id,
         name: foundPme.name,
@@ -58,8 +50,8 @@ class StorageService {
       
       this.setActiveCompany(foundPme.id);
       this.saveCompanyInfo(companyInfo);
-      localStorage.setItem('nexapme_pme_exists_on_cloud', 'true');
 
+      // 2. Récupération immédiate des utilisateurs (Gérant + Travailleurs) créés par l'admin
       try {
         const remoteUsers = await ApiService.getUsers(foundPme.id);
         if (remoteUsers && Array.isArray(remoteUsers)) {
@@ -73,7 +65,7 @@ class StorageService {
           this.saveUsers(mappedUsers);
         }
       } catch (e) {
-        this.saveUsers([]);
+        console.warn("Impossible de charger les utilisateurs distants.");
       }
 
       const license: LicenseInfo = {
@@ -93,54 +85,12 @@ class StorageService {
     }
   }
 
-  async registerPmeRemote(data: CompanyConfig, admin: UserProfile, license: LicenseInfo) {
-    // 1. Mise à jour/Création de la PME sur l'API Admin
-    const pmePayload = {
-      id: license.idUnique,
-      name: data.name,
-      owner_name: data.owner,
-      license_key: license.key,
-      license_type: license.type,
-      expiry_date: license.expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    };
-    
-    const alreadyExists = localStorage.getItem('nexapme_pme_exists_on_cloud') === 'true';
-    if (alreadyExists) {
-      await ApiService.updateAdminPme(pmePayload);
-    } else {
-      await ApiService.createAdminPme(pmePayload);
-    }
-
-    // 2. Création du compte MANAGER avec le format de permissions demandé
-    const userPayload = {
-      id: admin.id,
-      pme_id: license.idUnique,
-      name: admin.name, 
-      role: 'MANAGER',
-      pin_hash: admin.pin, 
-      permissions: {
-        sales: true,
-        stock: true,
-        history: true,
-        admin: true
-      }
-    };
-    
-    await ApiService.createUser(userPayload);
-    
-    this.setActiveCompany(license.idUnique);
-    this.saveCompanyInfo(data);
-    
-    const finalAdmin = { ...admin, permissions: Object.values(View) };
-    this.saveUsers([finalAdmin]);
-    this.setCurrentUser(null); 
-    
-    return true;
-  }
-
   async loginRemote(pme_id: string, user_id: string, pin: string) {
+    if (!pin) throw new Error("Code PIN requis");
+    
     const res = await ApiService.login(pme_id, user_id, pin);
     localStorage.setItem('nexapme_jwt', res.token);
+    
     const user: UserProfile = { 
       id: res.user.id, 
       name: res.user.name, 
@@ -148,10 +98,12 @@ class StorageService {
       pin: '',
       permissions: this.getDefaultPermissions(res.user.role)
     };
+    
     this.setCurrentUser(user);
     return { user, token: res.token };
   }
 
+  // --- Gestion Stock ---
   getStock(): StockItem[] {
     if (!this.currentPmeId) return [];
     const cache = localStorage.getItem(`cache_stock_${this.currentPmeId}`);
@@ -194,6 +146,7 @@ class StorageService {
     await this.fetchStock(); 
   }
 
+  // --- Ventes ---
   getSales(): Sale[] {
     if (!this.currentPmeId) return [];
     const cache = localStorage.getItem(`cache_sales_${this.currentPmeId}`);
@@ -233,6 +186,7 @@ class StorageService {
     localStorage.removeItem(`cache_sales_${this.currentPmeId}`);
   }
 
+  // --- Session & Config ---
   getCurrentUser(): UserProfile | null { const data = localStorage.getItem('nexapme_current_session'); return data ? JSON.parse(data) : null; }
   setCurrentUser(user: UserProfile | null) { if (user) localStorage.setItem('nexapme_current_session', JSON.stringify(user)); else localStorage.removeItem('nexapme_current_session'); }
   getLicense(): LicenseInfo | null { const data = localStorage.getItem('nexapme_active_license_info'); return data ? JSON.parse(data) : null; }
@@ -242,6 +196,8 @@ class StorageService {
   getUsers(): UserProfile[] { const data = localStorage.getItem(`nexapme_users_list_${this.currentPmeId}`); return data ? JSON.parse(data) : []; }
   saveUsers(users: UserProfile[]) { localStorage.setItem(`nexapme_users_list_${this.currentPmeId}`, JSON.stringify(users)); }
   getDefaultPermissions(role: string): View[] { return role === 'MANAGER' ? Object.values(View) : [View.DASHBOARD, View.SALES, View.STOCK, View.HISTORY]; }
+  
+  // --- Finances & Divers ---
   getExchangeRate(): number { return Number(localStorage.getItem('nexapme_rate')) || 2850; }
   updateExchangeRate(rate: number) { localStorage.setItem('nexapme_rate', rate.toString()); }
   formatFC(amount: number): string { return new Intl.NumberFormat('fr-FR').format(amount) + ' FC'; }
@@ -303,11 +259,7 @@ class StorageService {
       name: u.name, 
       role: u.role || 'WORKER', 
       pin_hash: u.pin, 
-      permissions: {
-        sales: true,
-        stock: true,
-        history: true
-      }
+      permissions: { sales: true, stock: true, history: true }
     }); 
     await this.fetchUsers(); 
   }

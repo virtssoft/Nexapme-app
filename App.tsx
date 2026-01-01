@@ -9,7 +9,6 @@ import SalesHistory from './pages/SalesHistory';
 import Credits from './pages/Credits';
 import CashJournal from './pages/CashJournal';
 import Inventory from './pages/Inventory';
-import Onboarding from './pages/Onboarding';
 import Settings from './pages/Settings';
 import AdminSpace from './pages/AdminSpace';
 import Chatbot from './components/Chatbot';
@@ -45,15 +44,14 @@ const App: React.FC = () => {
           setCurrentView(View.ADMIN_SPACE);
         } else {
           storageService.setActiveCompany(storedLicense.idUnique);
-          const config = storageService.getCompanyInfo();
-          if (config) setCompanyConfig(config);
+          setCompanyConfig(storageService.getCompanyInfo());
           
           const user = storageService.getCurrentUser();
           if (user) setCurrentUser(user);
         }
       }
       
-      setTimeout(() => setIsInitializing(false), 2000);
+      setTimeout(() => setIsInitializing(false), 1500);
     };
     restoreSession();
   }, []);
@@ -115,55 +113,30 @@ const App: React.FC = () => {
     );
   }
 
+  // ÉTAPE 1 : ACTIVATION LICENCE
   if (!activeLicense) {
     return <Launcher onValidated={(license) => triggerSessionLoader(() => {
       setActiveLicense(license);
       if (license.type === 'ADMIN') {
         setCurrentView(View.ADMIN_SPACE);
       } else {
+        // Une fois validé, StorageService a déjà stocké le config et les users
         setCompanyConfig(storageService.getCompanyInfo());
       }
     })} />;
   }
 
-  if (activeLicense.type === 'ADMIN') {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row relative">
-        <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
-          <div className="max-w-7xl mx-auto"><AdminSpace /></div>
-        </main>
-        <button onClick={() => handleLogoutOption('EXIT')} className="fixed bottom-6 right-6 p-4 bg-rose-600 text-white rounded-2xl shadow-2xl z-50 flex items-center space-x-2">
-            <ExitIcon size={20} />
-            <span className="font-black uppercase text-[10px]">Quitter Root</span>
-        </button>
-      </div>
-    );
-  }
-
-  const hasUsers = storageService.getUsers().length > 0;
-  
-  if (!companyConfig || !hasUsers) {
-    return <Onboarding 
-      onBackToLauncher={() => handleLogoutOption('EXIT')}
-      onComplete={(config) => triggerSessionLoader(() => {
-        setCompanyConfig(config);
-        const storedLicense = storageService.getLicense();
-        if (storedLicense) setActiveLicense(storedLicense);
-        // On ne définit pas le currentUser pour forcer l'affichage de l'écran de connexion
-        setCurrentUser(null);
-      })} 
-    />;
-  }
-
+  // ÉTAPE 2 : LOGIN (Directement après activation si la licence n'est pas ADMIN)
   if (!currentUser) {
     return <Login 
       onLogin={(user) => triggerSessionLoader(() => setCurrentUser(user))} 
       onExit={() => handleLogoutOption('EXIT')}
-      companyName={companyConfig?.name || ''} 
-      category={companyConfig?.subDomain || "Gestion"} 
+      companyName={companyConfig?.name || 'nexaPME'} 
+      category={companyConfig?.owner ? `Propriétaire: ${companyConfig.owner}` : "Espace Client"} 
     />;
   }
 
+  // ÉTAPE 3 : MAIN APP
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row relative">
       <Sidebar 
