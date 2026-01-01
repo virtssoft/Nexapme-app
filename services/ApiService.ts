@@ -90,7 +90,6 @@ export class ApiService {
         throw new Error(json.error || json.message || `Erreur ${response.status}`);
       }
 
-      // Gestion du format d'enveloppe { status: "ok", data: [...] }
       if (json.status === 'ok' && json.data !== undefined) return json.data as T;
       return json;
     } catch (error: any) {
@@ -105,13 +104,17 @@ export class ApiService {
   static createSale(saleData: any) { return this.request<any>('/sales/create.php', 'POST', saleData); }
   static getSales(pme_id: string) { return this.request<any[]>('/sales/history.php', 'GET', { pme_id }); }
   
-  // Admin PME Endpoints (CRUD)
   static getAdminPmes() { return this.request<any[]>('/admin/pme/index.php', 'GET'); }
   static createAdminPme(data: any) { return this.request<any>('/admin/pme/create.php', 'POST', data); }
   static updateAdminPme(data: any) { return this.request<any>('/admin/pme/update.php', 'POST', data); }
   static deleteAdminPme(id: string) { return this.request<any>('/admin/pme/delete.php', 'POST', { id }); }
   static getPmeDetails(id: string) { return this.request<any>('/admin/pme/show.php', 'GET', { id }); }
 
+  // --- CRUD USERS (Étape 2) ---
   static getUsers(pme_id: string) { return this.request<any[]>('/users/index.php', 'GET', { pme_id }); }
+  static getUserDetails(id: string) { return this.request<any>('/users/show.php', 'GET', { id }); }
   static createUser(data: any) { return this.request<any>('/users/create.php', 'POST', data); }
+  static updateUser(data: any) { return this.request<any>('/users/update.php', 'POST', data); }
+  static toggleUserStatus(id: string, status: 'ACTIVE' | 'DISABLED') { return this.request<any>('/users/toggle-status.php', 'POST', { id, status }); }
+  static deleteUser(id: string) { return this.request<any>('/users/delete.php', 'POST', { id }); }
 }

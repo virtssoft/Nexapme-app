@@ -11,7 +11,8 @@ import {
   CheckCircle2, 
   XCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 
 const Appointments: React.FC = () => {
@@ -54,7 +55,6 @@ const Appointments: React.FC = () => {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Calendar View (Simplified) */}
         <div className="lg:col-span-8 bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
            <div className="flex justify-between items-center mb-8">
               <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Aujourd'hui</h3>
@@ -84,13 +84,10 @@ const Appointments: React.FC = () => {
                    </div>
                 </div>
               ))}
-              {apps.length === 0 && (
-                <div className="py-20 text-center text-slate-300 italic font-bold">Aucun rendez-vous planifié.</div>
-              )}
+              {apps.length === 0 && <div className="py-20 text-center text-slate-300 italic font-bold">Aucun rendez-vous planifié.</div>}
            </div>
         </div>
 
-        {/* Sidebar Stats */}
         <div className="lg:col-span-4 space-y-6">
            <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
@@ -98,7 +95,7 @@ const Appointments: React.FC = () => {
                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">Occupation Journée</p>
                  <h2 className="text-5xl font-black">{apps.length} <span className="text-lg text-slate-400">RDV</span></h2>
                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(apps.length / 10) * 100}%` }}></div>
+                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, (apps.length / 10) * 100)}%` }}></div>
                  </div>
               </div>
            </div>
@@ -106,33 +103,33 @@ const Appointments: React.FC = () => {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200">
-             <div className="p-8 border-b border-slate-100 flex justify-between items-center">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-0 md:p-4 overflow-hidden">
+          <div className="bg-white rounded-none md:rounded-[2.5rem] w-full max-w-md max-h-screen md:max-h-[90vh] shadow-2xl animate-in zoom-in duration-200 flex flex-col">
+             <div className="p-8 border-b border-slate-100 flex justify-between items-center shrink-0">
                 <h3 className="font-black text-slate-800 uppercase tracking-widest">Nouveau Rendez-vous</h3>
-                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 text-2xl">&times;</button>
+                <button onClick={() => setIsModalOpen(false)} className="text-slate-400"><X size={24} /></button>
              </div>
-             <div className="p-8 space-y-4">
+             <div className="p-8 space-y-4 overflow-y-auto no-scrollbar flex-1">
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Client</label>
-                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold" value={formData.clientName || ''} onChange={(e) => setFormData({...formData, clientName: e.target.value})} />
+                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold outline-none" value={formData.clientName || ''} onChange={(e) => setFormData({...formData, clientName: e.target.value})} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Service</label>
-                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold" value={formData.serviceName || ''} onChange={(e) => setFormData({...formData, serviceName: e.target.value})} />
+                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold outline-none" value={formData.serviceName || ''} onChange={(e) => setFormData({...formData, serviceName: e.target.value})} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Date & Heure</label>
-                      <input type="datetime-local" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold text-xs" value={formData.dateTime || ''} onChange={(e) => setFormData({...formData, dateTime: e.target.value})} />
+                      <input type="datetime-local" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold text-xs outline-none" value={formData.dateTime || ''} onChange={(e) => setFormData({...formData, dateTime: e.target.value})} />
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Durée (min)</label>
-                      <input type="number" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold" value={formData.duration || 30} onChange={(e) => setFormData({...formData, duration: Number(e.target.value)})} />
+                      <input type="number" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 font-bold outline-none" value={formData.duration || 30} onChange={(e) => setFormData({...formData, duration: Number(e.target.value)})} />
                    </div>
                 </div>
              </div>
-             <div className="p-8 bg-slate-50 flex space-x-3 border-t border-slate-200 rounded-b-[2.5rem]">
+             <div className="p-8 bg-slate-50 flex space-x-3 border-t border-slate-200 shrink-0">
                 <button onClick={() => setIsModalOpen(false)} className="flex-1 py-4 rounded-2xl border border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-widest">Annuler</button>
                 <button onClick={handleSave} className="flex-1 py-4 rounded-2xl bg-slate-900 text-white font-black uppercase text-[10px] tracking-widest shadow-xl">Confirmer RDV</button>
              </div>

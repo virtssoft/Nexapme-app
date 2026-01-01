@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { storageService } from '../services/StorageService';
 import { CashFlow } from '../types';
-import { Plus, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, User, Wallet } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, User, Wallet, X } from 'lucide-react';
 
 const CashJournal: React.FC = () => {
   const [flows, setFlows] = useState<CashFlow[]>(storageService.getCashFlow());
@@ -120,24 +120,24 @@ const CashJournal: React.FC = () => {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl animate-in zoom-in duration-200">
-            <div className="p-8 bg-slate-900 text-white flex justify-between items-center rounded-t-[2.5rem]">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-0 md:p-4 overflow-hidden">
+          <div className="bg-white rounded-none md:rounded-[2.5rem] w-full max-w-md max-h-screen md:max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in duration-200">
+            <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
               <h3 className="text-xs font-black uppercase tracking-widest">Saisie de Caisse</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400">&times;</button>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400"><X size={24} /></button>
             </div>
-            <div className="p-8 space-y-6">
+            <div className="p-8 space-y-6 overflow-y-auto no-scrollbar flex-1">
               <div className="flex bg-slate-100 p-1 rounded-2xl">
                 <button onClick={() => setFormData({...formData, type: 'IN'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${formData.type === 'IN' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>Entrée (+)</button>
                 <button onClick={() => setFormData({...formData, type: 'OUT'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${formData.type === 'OUT' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-400'}`}>Sortie (-)</button>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase px-2">Montant</label>
-                <input type="number" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black" placeholder="0" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
+                <label className="text-[10px] font-black text-slate-400 uppercase px-2">Montant (FC)</label>
+                <input type="number" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black outline-none focus:border-slate-900" placeholder="0" value={formData.amount || ''} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase px-2">Catégorie</label>
-                <select className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black outline-none" value={formData.category || ''} onChange={(e) => setFormData({...formData, category: e.target.value})}>
+                <select className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black outline-none focus:border-slate-900" value={formData.category || ''} onChange={(e) => setFormData({...formData, category: e.target.value})}>
                   <option value="Charges">Charges (Loyer, Elec...)</option>
                   <option value="Personnel">Salaires / Avances</option>
                   <option value="Achat">Achat Divers</option>
@@ -146,8 +146,10 @@ const CashJournal: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase px-2">Libellé de l'opération</label>
-                <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold" placeholder="Détail..." value={formData.description || ''} onChange={(e) => setFormData({...formData, description: e.target.value})} />
+                <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-bold outline-none focus:border-slate-900" placeholder="Détail..." value={formData.description || ''} onChange={(e) => setFormData({...formData, description: e.target.value})} />
               </div>
+            </div>
+            <div className="p-8 bg-slate-50 border-t shrink-0">
               <button onClick={handleSave} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">Enregistrer le flux</button>
             </div>
           </div>

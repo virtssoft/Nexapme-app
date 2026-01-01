@@ -94,18 +94,35 @@ const Stock: React.FC = () => {
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-hidden">
-            <div className="p-8 bg-slate-900 text-white flex justify-between">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-0 md:p-4 overflow-hidden">
+          <div className="bg-white rounded-none md:rounded-[3rem] w-full max-w-xl max-h-screen md:max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-8 bg-slate-900 text-white flex justify-between shrink-0">
               <h3 className="font-black uppercase tracking-widest text-xs">Fiche Produit (DB)</h3>
               <button onClick={() => setIsModalOpen(false)}><X size={24} /></button>
             </div>
-            <div className="p-8 space-y-6">
-              <input type="text" placeholder="Désignation" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold" value={formData.designation || ''} onChange={(e) => setFormData({...formData, designation: e.target.value})} />
-              <div className="grid grid-cols-2 gap-4">
-                <input type="number" placeholder="Quantité" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold" value={formData.quantity || ''} onChange={(e) => setFormData({...formData, quantity: Number(e.target.value)})} />
-                <input type="number" placeholder="Prix Vente" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold" value={formData.retailPrice || ''} onChange={(e) => setFormData({...formData, retailPrice: Number(e.target.value)})} />
+            <div className="p-8 space-y-6 overflow-y-auto no-scrollbar flex-1">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase px-2">Désignation du produit</label>
+                <input type="text" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none" value={formData.designation || ''} onChange={(e) => setFormData({...formData, designation: e.target.value})} />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase px-2">Quantité</label>
+                  <input type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none" value={formData.quantity || ''} onChange={(e) => setFormData({...formData, quantity: Number(e.target.value)})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase px-2">Prix Vente (FC)</label>
+                  <input type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none" value={formData.retailPrice || ''} onChange={(e) => setFormData({...formData, retailPrice: Number(e.target.value)})} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase px-2">Catégorie</label>
+                <select className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none" value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="p-8 bg-slate-50 border-t shrink-0">
               <button onClick={handleSave} className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center">
                 {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
                 Enregistrer en Base de Données
