@@ -2,21 +2,47 @@
 const API_BASE_URL = 'https://nexaapi.comfortasbl.org/api';
 
 export class ApiService {
+  /**
+   * Vérifie si le serveur Nexa est physiquement joignable.
+   * On tente d'abord une lecture propre (CORS), sinon un ping aveugle (no-cors).
+   */
   static async checkStatus(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      // On utilise un simple GET sans en-tête complexe pour tester la connexion
-      await fetch(`${API_BASE_URL}/auth/validate-license.php`, { 
-        method: 'OPTIONS',
-        mode: 'cors',
+      try {
+        // Tentative 1: Lecture JSON (Idéal)
+        const response = await fetch(`${API_BASE_URL}/index.php`, { 
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-cache',
+          signal: controller.signal
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'online' || data.service) {
+            clearTimeout(timeoutId);
+            return true;
+          }
+        }
+      } catch (e) {
+        // Échec CORS ou JSON, on tente le fallback no-cors
+      }
+
+      // Tentative 2: Ping aveugle (no-cors)
+      await fetch(`${API_BASE_URL}/index.php`, { 
+        method: 'GET',
+        mode: 'no-cors', 
+        cache: 'no-cache',
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
       return true; 
-    } catch (e) {
+    } catch (e: any) {
+      console.warn("Nexa Cloud Check failed:", e.message);
       return false;
     }
   }
@@ -25,17 +51,20 @@ export class ApiService {
     const token = localStorage.getItem('nexapme_jwt');
     const licenseKey = localStorage.getItem('nexapme_active_license_key');
     
-    // On simplifie les headers au maximum pour éviter les pré-flight CORS complexes
     const headers: Record<string, string> = {
+      'Accept': 'application/json',
       'Content-Type': 'application/json'
     };
     
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    let url = `${API_BASE_URL}${endpoint}`;
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${API_BASE_URL}${cleanEndpoint}`;
+    
     const options: RequestInit = {
       method,
-      headers
+      headers,
+      mode: 'cors'
     };
 
     if (method === 'POST') {
@@ -45,21 +74,32 @@ export class ApiService {
     } else {
       const urlObj = new URL(url);
       Object.keys(data).forEach(key => urlObj.searchParams.append(key, String(data[key])));
-      url = urlObj.toString();
+      return this.executeFetch<T>(urlObj.toString(), options);
     }
     
+    return this.executeFetch<T>(url, options);
+  }
+
+  private static async executeFetch<T>(url: string, options: RequestInit): Promise<T> {
     try {
       const response = await fetch(url, options);
-      const json = await response.json().catch(() => ({}));
+      const text = await response.text();
+      
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        throw new Error("Réponse serveur non-JSON. Vérifiez votre configuration serveur.");
+      }
 
       if (!response.ok) {
-        throw new Error(json.error || json.message || `Erreur serveur (${response.status})`);
+        throw new Error(json.error || json.message || `Erreur ${response.status}`);
       }
 
       return json;
     } catch (error: any) {
-      if (error.message === 'Failed to fetch') {
-        throw new Error("Erreur CORS ou Hors-ligne : Le serveur Nexa ne répond pas. Vérifiez la configuration CORS sur votre serveur PHP.");
+      if (error.message === 'Failed to fetch' || error.message.includes('network error')) {
+        throw new Error("Liaison Cloud impossible : Erreur réseau ou blocage CORS.");
       }
       throw error;
     }

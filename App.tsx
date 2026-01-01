@@ -13,13 +13,12 @@ import Onboarding from './pages/Onboarding';
 import Settings from './pages/Settings';
 import AdminSpace from './pages/AdminSpace';
 import Chatbot from './components/Chatbot';
-import NotificationCenter from './components/NotificationCenter';
 import Login from './pages/Login';
 import Launcher from './components/Launcher';
 import Branding from './components/Branding';
 import { storageService } from './services/StorageService';
 import { ApiService } from './services/ApiService';
-import { Menu, LogOut, ShieldAlert, Loader2, Sparkles, CheckCircle, AlertCircle, User, LogOut as ExitIcon, X } from 'lucide-react';
+import { Menu, LogOut, Loader2, Sparkles, CheckCircle, AlertCircle, User, LogOut as ExitIcon, X } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
@@ -36,8 +35,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const restoreSession = async () => {
-      const isOnline = await ApiService.checkStatus();
-      setApiOnline(isOnline);
+      ApiService.checkStatus().then(setApiOnline);
 
       const storedLicense = storageService.getLicense();
       if (storedLicense) {
@@ -54,7 +52,8 @@ const App: React.FC = () => {
           if (user) setCurrentUser(user);
         }
       }
-      setTimeout(() => setIsInitializing(false), 2500);
+      
+      setTimeout(() => setIsInitializing(false), 2000);
     };
     restoreSession();
   }, []);
@@ -107,9 +106,9 @@ const App: React.FC = () => {
           <h1 className="text-6xl font-black text-white tracking-tighter uppercase">
             nexa<span className="text-emerald-500">PME</span>
           </h1>
-          <div className={`mt-8 px-6 py-2 rounded-full border text-[10px] font-black uppercase tracking-widest flex items-center space-x-3 ${apiOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
+          <div className={`mt-8 px-6 py-2 rounded-full border text-[10px] font-black uppercase tracking-widest flex items-center space-x-3 transition-colors ${apiOnline === null ? 'bg-slate-500/10 border-slate-500/30 text-slate-400' : apiOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
             {apiOnline === null ? <Loader2 size={14} className="animate-spin" /> : apiOnline ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-            <span>{apiOnline === null ? 'Liaison...' : apiOnline ? 'Serveur Cloud OK' : 'Mode Hors-Ligne'}</span>
+            <span>{apiOnline === null ? 'Liaison Cloud...' : apiOnline ? 'Serveur Cloud OK' : 'Cloud Inaccessible'}</span>
           </div>
         </div>
       </div>
@@ -121,24 +120,42 @@ const App: React.FC = () => {
       setActiveLicense(license);
       if (license.type === 'ADMIN') {
         setCurrentView(View.ADMIN_SPACE);
+      } else {
+        setCompanyConfig(storageService.getCompanyInfo());
       }
     })} />;
   }
 
-  // Si on a un placeholder de licence (Essai), on lance l'onboarding
-  if ((!companyConfig || activeLicense.key === 'PENDING_TRIAL') && activeLicense.type !== 'ADMIN') {
+  if (activeLicense.type === 'ADMIN') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row relative">
+        <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
+          <div className="max-w-7xl mx-auto"><AdminSpace /></div>
+        </main>
+        <button onClick={() => handleLogoutOption('EXIT')} className="fixed bottom-6 right-6 p-4 bg-rose-600 text-white rounded-2xl shadow-2xl z-50 flex items-center space-x-2">
+            <ExitIcon size={20} />
+            <span className="font-black uppercase text-[10px]">Quitter Root</span>
+        </button>
+      </div>
+    );
+  }
+
+  const hasUsers = storageService.getUsers().length > 0;
+  
+  if (!companyConfig || !hasUsers) {
     return <Onboarding 
       onBackToLauncher={() => handleLogoutOption('EXIT')}
       onComplete={(config) => triggerSessionLoader(() => {
         setCompanyConfig(config);
         const storedLicense = storageService.getLicense();
         if (storedLicense) setActiveLicense(storedLicense);
-        setCurrentUser(storageService.getCurrentUser());
+        // On ne définit pas le currentUser pour forcer l'affichage de l'écran de connexion
+        setCurrentUser(null);
       })} 
     />;
   }
 
-  if (!currentUser && activeLicense.type !== 'ADMIN') {
+  if (!currentUser) {
     return <Login 
       onLogin={(user) => triggerSessionLoader(() => setCurrentUser(user))} 
       onExit={() => handleLogoutOption('EXIT')}
@@ -152,17 +169,17 @@ const App: React.FC = () => {
       <Sidebar 
         currentView={currentView} 
         onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }} 
-        user={currentUser || { name: 'Super Admin', role: 'ADMIN', id: '0', pin: '' }} 
+        user={currentUser} 
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
-        companyName={companyConfig?.name || 'ROOT ADMIN'}
+        companyName={companyConfig?.name || 'nexaPME'}
         onLogout={() => setShowLogoutModal(true)}
         onExitApp={() => setShowLogoutModal(true)}
       />
       
       <header className="lg:hidden bg-slate-900 text-white p-4 flex items-center justify-between sticky top-0 z-40">
         <button onClick={() => setIsSidebarOpen(true)} className="p-2"><Menu size={24} /></button>
-        <Branding companyName={companyConfig?.name || 'nexaPME ROOT'} category="Cloud Control" size="sm" />
+        <Branding companyName={companyConfig?.name || 'nexaPME'} category="Cloud Control" size="sm" />
         <button onClick={() => setShowLogoutModal(true)} className="p-2 bg-rose-500 rounded-lg"><LogOut size={18} /></button>
       </header>
 
@@ -170,7 +187,6 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto">{renderCurrentView()}</div>
       </main>
 
-      {/* Modal Déconnexion à Choix */}
       {showLogoutModal && (
         <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[2.5rem] w-full max-sm shadow-2xl overflow-hidden animate-in zoom-in-95">
@@ -179,20 +195,18 @@ const App: React.FC = () => {
                 <button onClick={() => setShowLogoutModal(false)}><X size={20} /></button>
              </div>
              <div className="p-8 space-y-4">
-                {activeLicense?.type !== 'ADMIN' && (
-                  <button 
-                    onClick={() => handleLogoutOption('SWITCH')}
-                    className="w-full p-6 bg-slate-50 hover:bg-emerald-50 border-2 border-slate-100 hover:border-emerald-500 rounded-3xl transition-all flex items-center space-x-4 group"
-                  >
-                    <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                      <User size={24} />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-black text-slate-800 text-sm uppercase">Changer d'utilisateur</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Retour au choix du personnel</p>
-                    </div>
-                  </button>
-                )}
+                <button 
+                  onClick={() => handleLogoutOption('SWITCH')}
+                  className="w-full p-6 bg-slate-50 hover:bg-emerald-50 border-2 border-slate-100 hover:border-emerald-500 rounded-3xl transition-all flex items-center space-x-4 group"
+                >
+                  <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                    <User size={24} />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-black text-slate-800 text-sm uppercase">Changer d'utilisateur</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Retour au choix du personnel</p>
+                  </div>
+                </button>
 
                 <button 
                   onClick={() => handleLogoutOption('EXIT')}

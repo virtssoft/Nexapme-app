@@ -20,13 +20,14 @@ export interface LicenseInfo {
 }
 
 export interface PMEEntry {
-  idUnique: string;
+  id: string;
   name: string;
-  owner: string;
-  licenseKey: string;
-  licenseType: LicenseType;
-  expiryDate?: string;
-  createdAt: string;
+  owner_name: string;
+  license_key: string;
+  license_type: LicenseType;
+  expiry_date?: string;
+  status: 'ACTIVE' | 'SUSPENDED';
+  created_at: string;
 }
 
 export type ModuleDomain = 'FOOD_RETAIL' | 'TECH_SERVICES' | 'REAL_ESTATE' | 'MEDIA' | 'LOGISTICS' | 'FITNESS' | 'BEAUTY' | 'COMMERCE';
@@ -139,7 +140,6 @@ export interface InventoryReport {
   author: string;
 }
 
-// Added missing Operation type
 export interface Operation {
   id: string;
   clientName: string;
@@ -153,7 +153,6 @@ export interface Operation {
   metadata?: any;
 }
 
-// Added missing Appointment type
 export interface Appointment {
   id: string;
   clientName: string;
@@ -163,7 +162,6 @@ export interface Appointment {
   status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
 }
 
-// Added missing Quote types
 export type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REFUSED';
 
 export interface QuoteItem {

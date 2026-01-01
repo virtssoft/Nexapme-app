@@ -1,5 +1,5 @@
 
-import { StockItem, Sale, Credit, CashFlow, InventoryReport, CompanyConfig, UserProfile, LicenseInfo, PMEEntry, Operation, Appointment, Quote, SubCategory, View } from '../types';
+import { StockItem, Sale, Credit, CashFlow, InventoryReport, CompanyConfig, UserProfile, LicenseInfo, PMEEntry, Operation, Appointment, Quote, SubCategory, View, LicenseType } from '../types';
 import { ApiService } from './ApiService';
 
 class StorageService {
@@ -32,28 +32,59 @@ class StorageService {
         };
       }
 
-      localStorage.setItem('nexapme_active_license_key', key);
-      const res = await ApiService.validateLicense(key);
-      
-      const type = res.license_type; // ADMIN, UNIVERSAL, NORMAL, TRIAL
-      const expiry = res.expiry_date;
+      const allPmes = await ApiService.getAdminPmes();
+      const foundPme = allPmes.find((p: any) => p.license_key === key);
 
-      // Logique de vérification demandée
-      if (type === 'NORMAL' || type === 'TRIAL') {
-        if (expiry && new Date(expiry) < new Date()) {
-          throw new Error("Cette licence a expiré. Contactez Nexa.");
-        }
+      if (!foundPme) {
+        throw new Error("Clé de licence introuvable dans la base nexaPME.");
       }
-      // ADMIN et UNIVERSAL passent sans vérification de date
+
+      if (foundPme.status !== 'ACTIVE') {
+        throw new Error("Cette licence est suspendue. Contactez le support.");
+      }
+
+      const expiry = foundPme.expiry_date;
+      if (expiry && new Date(expiry) < new Date()) {
+        throw new Error(`Cette licence a expiré le ${new Date(expiry).toLocaleDateString()}.`);
+      }
+
+      const companyInfo: CompanyConfig = {
+        idUnique: foundPme.id,
+        name: foundPme.name,
+        owner: foundPme.owner_name,
+        currency: 'FC',
+        setupDate: foundPme.created_at || new Date().toISOString()
+      };
+      
+      this.setActiveCompany(foundPme.id);
+      this.saveCompanyInfo(companyInfo);
+      localStorage.setItem('nexapme_pme_exists_on_cloud', 'true');
+
+      try {
+        const remoteUsers = await ApiService.getUsers(foundPme.id);
+        if (remoteUsers && Array.isArray(remoteUsers)) {
+          const mappedUsers = remoteUsers.map(u => ({
+            id: u.id,
+            name: u.name,
+            role: u.role,
+            pin: '', 
+            permissions: typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions
+          }));
+          this.saveUsers(mappedUsers);
+        }
+      } catch (e) {
+        this.saveUsers([]);
+      }
 
       const license: LicenseInfo = {
         key: key,
-        idUnique: res.id,
-        pmeName: res.name,
-        type: type,
+        idUnique: foundPme.id,
+        pmeName: foundPme.name,
+        type: foundPme.license_type as LicenseType,
         expiryDate: expiry
       };
       
+      localStorage.setItem('nexapme_active_license_key', key);
       localStorage.setItem('nexapme_active_license_info', JSON.stringify(license));
       return license;
     } catch (e: any) {
@@ -63,7 +94,7 @@ class StorageService {
   }
 
   async registerPmeRemote(data: CompanyConfig, admin: UserProfile, license: LicenseInfo) {
-    // FORMAT EXACT REQUIS PAR L'API
+    // 1. Mise à jour/Création de la PME sur l'API Admin
     const pmePayload = {
       id: license.idUnique,
       name: data.name,
@@ -73,27 +104,36 @@ class StorageService {
       expiry_date: license.expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     };
     
-    // 1. Enregistrement PME
-    await ApiService.createAdminPme(pmePayload);
+    const alreadyExists = localStorage.getItem('nexapme_pme_exists_on_cloud') === 'true';
+    if (alreadyExists) {
+      await ApiService.updateAdminPme(pmePayload);
+    } else {
+      await ApiService.createAdminPme(pmePayload);
+    }
 
-    // 2. Enregistrement Utilisateur Gérant
+    // 2. Création du compte MANAGER avec le format de permissions demandé
     const userPayload = {
       id: admin.id,
       pme_id: license.idUnique,
-      name: admin.name,
+      name: admin.name, 
       role: 'MANAGER',
-      pin_hash: admin.pin,
-      permissions: JSON.stringify(admin.permissions)
+      pin_hash: admin.pin, 
+      permissions: {
+        sales: true,
+        stock: true,
+        history: true,
+        admin: true
+      }
     };
+    
     await ApiService.createUser(userPayload);
     
-    // 3. Persistance locale
-    localStorage.setItem('nexapme_active_license_key', license.key);
-    localStorage.setItem('nexapme_active_license_info', JSON.stringify(license));
     this.setActiveCompany(license.idUnique);
     this.saveCompanyInfo(data);
-    this.saveUsers([admin]);
-    this.setCurrentUser(admin);
+    
+    const finalAdmin = { ...admin, permissions: Object.values(View) };
+    this.saveUsers([finalAdmin]);
+    this.setCurrentUser(null); 
     
     return true;
   }
@@ -112,8 +152,6 @@ class StorageService {
     return { user, token: res.token };
   }
 
-  // --- Stock & Sales ---
-  // Added synchronous helper to get stock from cache
   getStock(): StockItem[] {
     if (!this.currentPmeId) return [];
     const cache = localStorage.getItem(`cache_stock_${this.currentPmeId}`);
@@ -156,24 +194,6 @@ class StorageService {
     await this.fetchStock(); 
   }
 
-  async addSale(sale: Sale) {
-    const payload = { 
-      id: sale.id || this.generateUUID(),
-      pme_id: this.currentPmeId,
-      user_id: this.getCurrentUser()?.id,
-      payment_type: sale.paymentType,
-      customer_name: sale.customerName || 'Client Comptant',
-      items: sale.items.map(it => ({
-        item_id: it.itemId,
-        quantity: it.quantity
-      }))
-    };
-    await ApiService.createSale(payload);
-    localStorage.removeItem(`cache_stock_${this.currentPmeId}`);
-    localStorage.removeItem(`cache_sales_${this.currentPmeId}`);
-  }
-
-  // Added synchronous helper to get sales from cache
   getSales(): Sale[] {
     if (!this.currentPmeId) return [];
     const cache = localStorage.getItem(`cache_sales_${this.currentPmeId}`);
@@ -196,7 +216,23 @@ class StorageService {
     }
   }
 
-  // --- Helpers ---
+  async addSale(sale: Sale) {
+    const payload = { 
+      id: sale.id || this.generateUUID(),
+      pme_id: this.currentPmeId,
+      user_id: this.getCurrentUser()?.id,
+      payment_type: sale.paymentType,
+      customer_name: sale.customerName || 'Client Comptant',
+      items: sale.items.map(it => ({
+        item_id: it.itemId,
+        quantity: it.quantity
+      }))
+    };
+    await ApiService.createSale(payload);
+    localStorage.removeItem(`cache_stock_${this.currentPmeId}`);
+    localStorage.removeItem(`cache_sales_${this.currentPmeId}`);
+  }
+
   getCurrentUser(): UserProfile | null { const data = localStorage.getItem('nexapme_current_session'); return data ? JSON.parse(data) : null; }
   setCurrentUser(user: UserProfile | null) { if (user) localStorage.setItem('nexapme_current_session', JSON.stringify(user)); else localStorage.removeItem('nexapme_current_session'); }
   getLicense(): LicenseInfo | null { const data = localStorage.getItem('nexapme_active_license_info'); return data ? JSON.parse(data) : null; }
@@ -210,16 +246,20 @@ class StorageService {
   updateExchangeRate(rate: number) { localStorage.setItem('nexapme_rate', rate.toString()); }
   formatFC(amount: number): string { return new Intl.NumberFormat('fr-FR').format(amount) + ' FC'; }
   formatUSD(amountFC: number): string { const rate = this.getExchangeRate(); return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountFC / rate); }
-  getCashFlow(): CashFlow[] { const cache = localStorage.getItem(`cache_cash_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
+  
+  getCashFlow(): CashFlow[] { return JSON.parse(localStorage.getItem(`cache_cash_${this.currentPmeId}`) || '[]'); }
   getCashBalance(): number { const flows = this.getCashFlow(); return flows.reduce((acc, f) => f.type === 'IN' ? acc + f.amount : acc - f.amount, 0); }
+  
   recordCashFlow(amount: number, type: 'IN' | 'OUT', category: string, description: string) { 
     const flows = this.getCashFlow();
     const newFlow = { id: this.generateUUID(), date: new Date().toISOString(), type, category, description, amount, author: this.getCurrentUser()?.name || 'system' };
     localStorage.setItem(`cache_cash_${this.currentPmeId}`, JSON.stringify([newFlow, ...flows]));
   }
+  
   async fetchCashFlow() { return this.getCashFlow(); }
   async fetchCredits() { return JSON.parse(localStorage.getItem(`gestoalim_credits_${this.currentPmeId}`) || '[]'); }
   getCredits() { return JSON.parse(localStorage.getItem(`gestoalim_credits_${this.currentPmeId}`) || '[]'); }
+  
   async repayCredit(id: string, amount: number) {
     const credits = this.getCredits().map((c: any) => {
       if (c.id === id) {
@@ -231,16 +271,47 @@ class StorageService {
     localStorage.setItem(`gestoalim_credits_${this.currentPmeId}`, JSON.stringify(credits));
     this.recordCashFlow(amount, 'IN', 'Remboursement', `Crédit ${id}`);
   }
+  
   async fetchInventories() { return JSON.parse(localStorage.getItem(`gestoalim_inventory_${this.currentPmeId}`) || '[]'); }
   getInventories() { return JSON.parse(localStorage.getItem(`gestoalim_inventory_${this.currentPmeId}`) || '[]'); }
   addInventory(r: any) { localStorage.setItem(`gestoalim_inventory_${this.currentPmeId}`, JSON.stringify([r, ...this.getInventories()])); }
   updateStock(s: any) { localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(s)); }
+  
   async getPmeListRemote() { return await ApiService.getAdminPmes(); }
   async createPmeRemote(d: any) { return await ApiService.createAdminPme({ id: this.generateUUID(), name: d.name, owner_name: d.owner, license_key: d.licenseKey, license_type: d.licenseType, expiry_date: d.expiryDate }); }
   async updatePmeRemote(id: string, d: any) { return await ApiService.updateAdminPme({ id, name: d.name, owner_name: d.owner, license_key: d.licenseKey, license_type: d.licenseType, expiry_date: d.expiryDate }); }
   async deletePmeRemote(id: string) { return await ApiService.deleteAdminPme(id); }
-  async fetchUsers() { const data = await ApiService.getUsers(this.currentPmeId!); this.saveUsers(data); return data; }
-  async saveNewUser(u: any) { await ApiService.createUser({ id: this.generateUUID(), pme_id: this.currentPmeId, name: u.name, role: u.role, pin_hash: u.pin, permissions: JSON.stringify(u.permissions) }); await this.fetchUsers(); }
+  
+  async fetchUsers() { 
+    if (!this.currentPmeId) return [];
+    const data = await ApiService.getUsers(this.currentPmeId); 
+    const mapped = data.map(u => ({
+        id: u.id,
+        name: u.name,
+        role: u.role,
+        pin: '',
+        permissions: typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions
+    }));
+    this.saveUsers(mapped); 
+    return mapped; 
+  }
+
+  async saveNewUser(u: any) { 
+    await ApiService.createUser({ 
+      id: u.id || this.generateUUID(), 
+      pme_id: this.currentPmeId, 
+      name: u.name, 
+      role: u.role || 'WORKER', 
+      pin_hash: u.pin, 
+      permissions: {
+        sales: true,
+        stock: true,
+        history: true
+      }
+    }); 
+    await this.fetchUsers(); 
+  }
+  
   getOperations() { return JSON.parse(localStorage.getItem(`nexapme_operations_${this.currentPmeId}`) || '[]'); }
   saveOperations(ops: any) { localStorage.setItem(`nexapme_operations_${this.currentPmeId}`, JSON.stringify(ops)); }
   getAppointments() { return JSON.parse(localStorage.getItem(`nexapme_appointments_${this.currentPmeId}`) || '[]'); }
@@ -249,8 +320,59 @@ class StorageService {
   saveQuotes(q: any) { localStorage.setItem(`nexapme_quotes_${this.currentPmeId}`, JSON.stringify(q)); }
   getSubCategories() { return JSON.parse(localStorage.getItem(`nexapme_subcategories_${this.currentPmeId}`) || '[]'); }
   saveSubCategories(s: any) { localStorage.setItem(`nexapme_subcategories_${this.currentPmeId}`, JSON.stringify(s)); }
+  
   getWeeklySalesData() { return []; }
-  exportAllDataAsJSON() { /* ... */ }
-  importDataFromJSON(j: string) { /* ... */ }
+
+  exportAllDataAsJSON() {
+    if (!this.currentPmeId) return;
+    const data = {
+      company: this.getCompanyInfo(),
+      stock: this.getStock(),
+      sales: this.getSales(),
+      credits: this.getCredits(),
+      cash: this.getCashFlow(),
+      inventory: this.getInventories(),
+      users: this.getUsers(),
+      operations: this.getOperations(),
+      appointments: this.getAppointments(),
+      quotes: this.getQuotes(),
+      subcategories: this.getSubCategories()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nexapme_backup_${this.currentPmeId}_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  importDataFromJSON(jsonText: string) {
+    try {
+      const data = JSON.parse(jsonText);
+      if (!this.currentPmeId) {
+        alert("Aucune PME active. Connectez-vous d'abord.");
+        return;
+      }
+      
+      if (data.company) this.saveCompanyInfo(data.company);
+      if (data.stock) localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(data.stock));
+      if (data.sales) localStorage.setItem(`cache_sales_${this.currentPmeId}`, JSON.stringify(data.sales));
+      if (data.credits) localStorage.setItem(`gestoalim_credits_${this.currentPmeId}`, JSON.stringify(data.credits));
+      if (data.cash) localStorage.setItem(`cache_cash_${this.currentPmeId}`, JSON.stringify(data.cash));
+      if (data.inventory) localStorage.setItem(`gestoalim_inventory_${this.currentPmeId}`, JSON.stringify(data.inventory));
+      if (data.users) this.saveUsers(data.users);
+      if (data.operations) this.saveOperations(data.operations);
+      if (data.appointments) this.saveAppointments(data.appointments);
+      if (data.quotes) this.saveQuotes(data.quotes);
+      if (data.subcategories) this.saveSubCategories(data.subcategories);
+      
+      alert("Données importées avec succès. L'application va redémarrer.");
+      window.location.reload();
+    } catch (e) {
+      console.error("Import error:", e);
+      alert("Erreur lors de l'importation : Format JSON invalide.");
+    }
+  }
 }
 export const storageService = new StorageService();

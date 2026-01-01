@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Search, 
   RefreshCw, X, Copy, CheckCircle2, 
   Loader2, Edit3, Save, CloudOff, Cloud, Database,
-  AlertCircle
+  AlertCircle, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 
 const AdminSpace: React.FC = () => {
@@ -21,7 +21,8 @@ const AdminSpace: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPme, setEditingPme] = useState<PMEEntry | null>(null);
   const [formData, setFormData] = useState<Partial<PMEEntry>>({
-    licenseType: 'TRIAL'
+    license_type: 'TRIAL',
+    status: 'ACTIVE'
   });
 
   useEffect(() => {
@@ -37,7 +38,7 @@ const AdminSpace: React.FC = () => {
   const loadPmes = async () => {
     setIsLoading(true);
     try {
-      const data = await storageService.getPmeListRemote();
+      const data = await ApiService.getAdminPmes();
       setPmeList(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error("Failed to load PMES", e);
@@ -55,9 +56,10 @@ const AdminSpace: React.FC = () => {
   const openAddModal = () => {
     setEditingPme(null);
     setFormData({ 
-        licenseType: 'TRIAL', 
-        licenseKey: 'NEXA-' + Math.random().toString(36).substr(2, 8).toUpperCase(),
-        expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        license_type: 'TRIAL', 
+        status: 'ACTIVE',
+        license_key: 'NEXA-' + Math.random().toString(36).substr(2, 8).toUpperCase(),
+        expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     });
     setIsModalOpen(true);
   };
@@ -69,7 +71,7 @@ const AdminSpace: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.name || !formData.owner) {
+    if (!formData.name || !formData.owner_name) {
       alert("Veuillez remplir les champs obligatoires (Nom et Propriétaire).");
       return;
     }
@@ -77,9 +79,9 @@ const AdminSpace: React.FC = () => {
     setIsLoading(true);
     try {
       if (editingPme) {
-        await storageService.updatePmeRemote(editingPme.idUnique, formData);
+        await ApiService.updateAdminPme(formData);
       } else {
-        await storageService.createPmeRemote(formData);
+        await ApiService.createAdminPme(formData);
       }
       await loadPmes();
       setIsModalOpen(false);
@@ -95,7 +97,7 @@ const AdminSpace: React.FC = () => {
     if (confirm("Confirmer la suppression ? Cette action est irréversible sur le serveur.")) {
       setIsLoading(true);
       try {
-        await storageService.deletePmeRemote(id);
+        await ApiService.deleteAdminPme(id);
         await loadPmes();
       } catch (e: any) {
         alert("Erreur lors de la suppression : " + e.message);
@@ -107,8 +109,8 @@ const AdminSpace: React.FC = () => {
 
   const filteredPmes = pmeList.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.owner.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.licenseKey.toLowerCase().includes(searchTerm.toLowerCase())
+    p.owner_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.license_key.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -117,7 +119,7 @@ const AdminSpace: React.FC = () => {
         <div className="space-y-2">
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">nexaPME <span className="text-emerald-500 text-2xl md:text-4xl">ROOT</span></h1>
           <div className="flex items-center space-x-3">
-            <p className="text-slate-400 font-bold text-[9px] md:text-[10px] uppercase tracking-[0.3em]">Administration des Licences</p>
+            <p className="text-slate-400 font-bold text-[9px] md:text-[10px] uppercase tracking-[0.3em]">Administration des Licences Cloud</p>
             <div className={`px-2 py-0.5 rounded-full flex items-center space-x-2 border ${serverOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
               <div className={`w-1 h-1 rounded-full ${serverOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
               <span className="text-[7px] font-black uppercase tracking-widest">{serverOnline ? 'Server Online' : 'Server Offline'}</span>
@@ -136,7 +138,7 @@ const AdminSpace: React.FC = () => {
             className="flex-1 md:flex-none px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-2"
           >
             <Plus size={20} />
-            <span>Nouvelle PME</span>
+            <span>Nouvelle Licence</span>
           </button>
         </div>
       </header>
@@ -160,17 +162,23 @@ const AdminSpace: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
           {filteredPmes.map(p => (
-            <div key={p.idUnique} className="bg-white rounded-[2rem] md:rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden group flex flex-col hover:border-emerald-500 transition-all hover:shadow-2xl">
+            <div key={p.id} className={`bg-white rounded-[2rem] md:rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden group flex flex-col hover:border-emerald-500 transition-all hover:shadow-2xl ${p.status === 'SUSPENDED' ? 'opacity-75 grayscale' : ''}`}>
                <div className="p-6 md:p-8 space-y-4 md:space-y-6 flex-1">
                   <div className="flex justify-between items-start">
-                    <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${p.licenseType === 'NORMAL' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {p.licenseType}
+                    <div className="flex gap-2">
+                        <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${p.license_type === 'NORMAL' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {p.license_type}
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${p.status === 'ACTIVE' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                           {p.status === 'ACTIVE' ? <ShieldCheck size={10}/> : <ShieldAlert size={10}/>}
+                           <span>{p.status}</span>
+                        </div>
                     </div>
                     <div className="flex gap-1">
                         <button onClick={() => openEditModal(p)} className="p-2 text-slate-400 hover:text-blue-500 transition-colors bg-slate-50 rounded-lg">
                             <Edit3 size={16} />
                         </button>
-                        <button onClick={() => handleDelete(p.idUnique)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors bg-slate-50 rounded-lg">
+                        <button onClick={() => handleDelete(p.id)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors bg-slate-50 rounded-lg">
                             <Trash2 size={16} />
                         </button>
                     </div>
@@ -179,39 +187,41 @@ const AdminSpace: React.FC = () => {
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
                        <Database size={14} className="text-slate-300" />
-                       <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tighter leading-none truncate">{p.name}</h3>
+                       <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tighter leading-none truncate uppercase">{p.name}</h3>
                     </div>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase truncate px-5">Propriétaire : {p.owner}</p>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase truncate px-5">Gérant : {p.owner_name}</p>
                   </div>
 
                   <div className="space-y-3">
                       <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between">
-                        <p className="font-mono font-black text-emerald-400 text-xs truncate mr-2 tracking-widest">{p.licenseKey}</p>
-                        <button onClick={() => copyToClipboard(p.licenseKey)} className="p-1.5 text-slate-500 hover:text-emerald-400 transition-colors">
-                            {copiedKey === p.licenseKey ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+                        <p className="font-mono font-black text-emerald-400 text-xs truncate mr-2 tracking-widest">{p.license_key}</p>
+                        <button onClick={() => copyToClipboard(p.license_key)} className="p-1.5 text-slate-500 hover:text-emerald-400 transition-colors">
+                            {copiedKey === p.license_key ? <CheckCircle2 size={16} /> : <Copy size={16} />}
                         </button>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                          <div className="p-2 bg-slate-50/50 rounded-lg border border-slate-100">
                             <p className="text-[7px] font-black text-slate-400 uppercase mb-1">Expiration</p>
-                            <p className={`text-[9px] font-black truncate ${p.expiryDate && new Date(p.expiryDate) < new Date() ? 'text-rose-600' : 'text-slate-800'}`}>
-                                {p.expiryDate ? new Date(p.expiryDate).toLocaleDateString() : 'ILLIMITÉ'}
+                            <p className={`text-[9px] font-black truncate ${p.expiry_date && new Date(p.expiry_date) < new Date() ? 'text-rose-600' : 'text-slate-800'}`}>
+                                {p.expiry_date ? new Date(p.expiry_date).toLocaleDateString() : 'ILLIMITÉ'}
                             </p>
                          </div>
                          <div className="p-2 bg-slate-50/50 rounded-lg border border-slate-100">
                             <p className="text-[7px] font-black text-slate-400 uppercase mb-1">ID SYSTÈME</p>
-                            <p className="text-[9px] font-black text-slate-800 truncate">#{p.idUnique.substr(0, 8)}</p>
+                            <p className="text-[9px] font-black text-slate-800 truncate">#{p.id.substr(0, 8)}</p>
                          </div>
                       </div>
                   </div>
                </div>
                
-               <div className="px-6 py-4 bg-slate-900 border-t border-slate-800 flex justify-between items-center">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Inscrit le {new Date(p.createdAt || Date.now()).toLocaleDateString()}</span>
+               <div className={`px-6 py-4 border-t flex justify-between items-center ${p.status === 'ACTIVE' ? 'bg-emerald-900/10 border-emerald-100' : 'bg-slate-100 border-slate-200'}`}>
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Inscrit le {new Date(p.created_at || Date.now()).toLocaleDateString()}</span>
                   <div className="flex items-center gap-2">
-                      <Cloud className="text-emerald-500" size={12} />
-                      <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Active Link</span>
+                      <Cloud className={p.status === 'ACTIVE' ? "text-emerald-500" : "text-slate-400"} size={12} />
+                      <span className={`text-[8px] font-black uppercase tracking-widest ${p.status === 'ACTIVE' ? 'text-emerald-500' : 'text-slate-400'}`}>
+                         {p.status === 'ACTIVE' ? 'Connexion Active' : 'Session Coupée'}
+                      </span>
                   </div>
                </div>
             </div>
@@ -219,7 +229,7 @@ const AdminSpace: React.FC = () => {
           {pmeList.length === 0 && !isLoading && (
             <div className="col-span-full py-32 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
                <CloudOff size={64} className="mx-auto text-slate-100 mb-4" />
-               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Aucune PME enregistrée sur le serveur</p>
+               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Aucune licence enregistrée sur le serveur</p>
             </div>
           )}
         </div>
@@ -230,7 +240,7 @@ const AdminSpace: React.FC = () => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-3">
           <div className="bg-white rounded-[2.5rem] w-full max-w-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center shrink-0">
-                <h3 className="text-sm font-black uppercase tracking-widest">{editingPme ? 'Modifier la Licence' : 'Enregistrer une nouvelle PME'}</h3>
+                <h3 className="text-sm font-black uppercase tracking-widest">{editingPme ? 'Modifier la Licence' : 'Émettre une Licence Cloud'}</h3>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-xl transition-all">
                     <X size={20} />
                 </button>
@@ -239,35 +249,35 @@ const AdminSpace: React.FC = () => {
             <div className="p-6 md:p-8 space-y-6 overflow-y-auto no-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom de l'Etablissement</label>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom Business</label>
                   <input 
                     type="text" 
-                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-emerald-500" 
-                    placeholder="Ex: Supermarché Alpha"
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-emerald-500 uppercase" 
+                    placeholder="Ex: MAISON NADSTORE"
                     value={formData.name || ''} 
                     onChange={(e) => setFormData({...formData, name: e.target.value})} 
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Propriétaire / Gérant</label>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Propriétaire Réel</label>
                   <input 
                     type="text" 
                     className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-emerald-500" 
-                    placeholder="Ex: Jean Mukendi"
-                    value={formData.owner || ''} 
-                    onChange={(e) => setFormData({...formData, owner: e.target.value})} 
+                    placeholder="Ex: John Doe"
+                    value={formData.owner_name || ''} 
+                    onChange={(e) => setFormData({...formData, owner_name: e.target.value})} 
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Générer Clé Licence</label>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Clé Licence</label>
                   <div className="relative">
                     <input 
                       type="text" 
                       className="w-full px-5 py-3.5 bg-emerald-50 border-2 border-emerald-100 rounded-2xl font-mono font-black text-emerald-600 text-sm outline-none" 
-                      value={formData.licenseKey || ''} 
-                      onChange={(e) => setFormData({...formData, licenseKey: e.target.value})} 
+                      value={formData.license_key || ''} 
+                      onChange={(e) => setFormData({...formData, license_key: e.target.value})} 
                     />
-                    <button onClick={() => setFormData({...formData, licenseKey: 'NEXA-' + Math.random().toString(36).substr(2, 8).toUpperCase()})} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600 hover:rotate-180 transition-all">
+                    <button onClick={() => setFormData({...formData, license_key: 'NEXA-' + Math.random().toString(36).substr(2, 8).toUpperCase()})} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600 hover:rotate-180 transition-all">
                        <RefreshCw size={16} />
                     </button>
                   </div>
@@ -276,21 +286,33 @@ const AdminSpace: React.FC = () => {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Type de Licence</label>
                   <select 
                     className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none"
-                    value={formData.licenseType}
-                    onChange={(e) => setFormData({...formData, licenseType: e.target.value as LicenseType})}
+                    value={formData.license_type}
+                    onChange={(e) => setFormData({...formData, license_type: e.target.value as LicenseType})}
                   >
                     <option value="TRIAL">DÉMO (7 ou 30 Jours)</option>
                     <option value="NORMAL">BUSINESS STANDARD</option>
                     <option value="UNIVERSAL">PREMIUM UNLIMITED</option>
+                    <option value="ADMIN">ROOT ADMINISTRATOR</option>
                   </select>
                 </div>
-                <div className="md:col-span-2 space-y-1">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">État de l'Accès</label>
+                  <select 
+                    className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none"
+                    value={formData.status}
+                    onChange={(e) => setFormData({...formData, status: e.target.value as 'ACTIVE' | 'SUSPENDED'})}
+                  >
+                    <option value="ACTIVE">ACTIF (Accès Cloud OK)</option>
+                    <option value="SUSPENDED">SUSPENDU (Blocage immédiat)</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Date d'Expiration</label>
                   <input 
                     type="date" 
                     className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm outline-none focus:border-emerald-500" 
-                    value={formData.expiryDate ? new Date(formData.expiryDate).toISOString().split('T')[0] : ''} 
-                    onChange={(e) => setFormData({...formData, expiryDate: e.target.value})} 
+                    value={formData.expiry_date ? new Date(formData.expiry_date).toISOString().split('T')[0] : ''} 
+                    onChange={(e) => setFormData({...formData, expiry_date: e.target.value})} 
                   />
                 </div>
               </div>
@@ -298,7 +320,7 @@ const AdminSpace: React.FC = () => {
               <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start space-x-3">
                  <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
                  <p className="text-[9px] font-bold text-amber-700 leading-relaxed uppercase">
-                    L'enregistrement sur le serveur central est immédiat. La PME pourra se connecter dès la validation de sa clé sur son écran de démarrage.
+                    Modifier le statut d'une licence bloque ou débloque instantanément l'accès de l'utilisateur final au Cloud nexaPME.
                  </p>
               </div>
 
@@ -308,7 +330,7 @@ const AdminSpace: React.FC = () => {
                 className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 shrink-0"
               >
                 {isLoading ? <Loader2 className="animate-spin" /> : <Save size={18} />}
-                <span>Confirmer l'accès Root</span>
+                <span>Confirmer les modifications Root</span>
               </button>
             </div>
           </div>
