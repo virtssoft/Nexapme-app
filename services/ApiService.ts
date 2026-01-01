@@ -4,7 +4,6 @@ const API_BASE_URL = 'https://nexaapi.comfortasbl.org/api';
 export class ApiService {
   /**
    * Vérifie si le serveur Nexa est physiquement joignable.
-   * On tente d'abord une lecture propre (CORS), sinon un ping aveugle (no-cors).
    */
   static async checkStatus(): Promise<boolean> {
     try {
@@ -12,7 +11,6 @@ export class ApiService {
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
       try {
-        // Tentative 1: Lecture JSON (Idéal)
         const response = await fetch(`${API_BASE_URL}/index.php`, { 
           method: 'GET',
           mode: 'cors',
@@ -27,11 +25,8 @@ export class ApiService {
             return true;
           }
         }
-      } catch (e) {
-        // Échec CORS ou JSON, on tente le fallback no-cors
-      }
+      } catch (e) {}
 
-      // Tentative 2: Ping aveugle (no-cors)
       await fetch(`${API_BASE_URL}/index.php`, { 
         method: 'GET',
         mode: 'no-cors', 
@@ -42,7 +37,6 @@ export class ApiService {
       clearTimeout(timeoutId);
       return true; 
     } catch (e: any) {
-      console.warn("Nexa Cloud Check failed:", e.message);
       return false;
     }
   }
@@ -89,18 +83,17 @@ export class ApiService {
       try {
         json = JSON.parse(text);
       } catch (e) {
-        throw new Error("Réponse serveur non-JSON. Vérifiez votre configuration serveur.");
+        throw new Error("Réponse serveur non-JSON.");
       }
 
       if (!response.ok) {
         throw new Error(json.error || json.message || `Erreur ${response.status}`);
       }
 
+      // Gestion du format d'enveloppe { status: "ok", data: [...] }
+      if (json.status === 'ok' && json.data !== undefined) return json.data as T;
       return json;
     } catch (error: any) {
-      if (error.message === 'Failed to fetch' || error.message.includes('network error')) {
-        throw new Error("Liaison Cloud impossible : Erreur réseau ou blocage CORS.");
-      }
       throw error;
     }
   }
@@ -111,10 +104,14 @@ export class ApiService {
   static saveProduct(data: any) { return this.request<any>('/stock/create.php', 'POST', data); }
   static createSale(saleData: any) { return this.request<any>('/sales/create.php', 'POST', saleData); }
   static getSales(pme_id: string) { return this.request<any[]>('/sales/history.php', 'GET', { pme_id }); }
+  
+  // Admin PME Endpoints (CRUD)
   static getAdminPmes() { return this.request<any[]>('/admin/pme/index.php', 'GET'); }
   static createAdminPme(data: any) { return this.request<any>('/admin/pme/create.php', 'POST', data); }
   static updateAdminPme(data: any) { return this.request<any>('/admin/pme/update.php', 'POST', data); }
   static deleteAdminPme(id: string) { return this.request<any>('/admin/pme/delete.php', 'POST', { id }); }
+  static getPmeDetails(id: string) { return this.request<any>('/admin/pme/show.php', 'GET', { id }); }
+
   static getUsers(pme_id: string) { return this.request<any[]>('/users/index.php', 'GET', { pme_id }); }
   static createUser(data: any) { return this.request<any>('/users/create.php', 'POST', data); }
 }

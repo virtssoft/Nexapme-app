@@ -40,8 +40,12 @@ const App: React.FC = () => {
       if (storedLicense) {
         setActiveLicense(storedLicense);
         
+        // Si c'est un administrateur ROOT, on saute l'écran de Login
         if (storedLicense.type === 'ADMIN') {
           setCurrentView(View.ADMIN_SPACE);
+          // On crée une session utilisateur factice pour le gérant root
+          const adminUser: UserProfile = { id: 'admin-root', name: 'Administrateur Nexa', role: 'ADMIN', pin: '' };
+          setCurrentUser(adminUser);
         } else {
           storageService.setActiveCompany(storedLicense.idUnique);
           setCompanyConfig(storageService.getCompanyInfo());
@@ -119,14 +123,15 @@ const App: React.FC = () => {
       setActiveLicense(license);
       if (license.type === 'ADMIN') {
         setCurrentView(View.ADMIN_SPACE);
+        const adminUser: UserProfile = { id: 'admin-root', name: 'Administrateur Nexa', role: 'ADMIN', pin: '' };
+        setCurrentUser(adminUser);
       } else {
-        // Une fois validé, StorageService a déjà stocké le config et les users
         setCompanyConfig(storageService.getCompanyInfo());
       }
     })} />;
   }
 
-  // ÉTAPE 2 : LOGIN (Directement après activation si la licence n'est pas ADMIN)
+  // ÉTAPE 2 : LOGIN (Seulement pour les PME normales)
   if (!currentUser) {
     return <Login 
       onLogin={(user) => triggerSessionLoader(() => setCurrentUser(user))} 
@@ -136,23 +141,29 @@ const App: React.FC = () => {
     />;
   }
 
-  // ÉTAPE 3 : MAIN APP
+  // ÉTAPE 3 : MAIN APP (ROOT ou PME)
+  const isAdminRoot = activeLicense.type === 'ADMIN';
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row relative">
-      <Sidebar 
-        currentView={currentView} 
-        onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }} 
-        user={currentUser} 
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        companyName={companyConfig?.name || 'nexaPME'}
-        onLogout={() => setShowLogoutModal(true)}
-        onExitApp={() => setShowLogoutModal(true)}
-      />
+      {!isAdminRoot && (
+        <Sidebar 
+          currentView={currentView} 
+          onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }} 
+          user={currentUser} 
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+          companyName={companyConfig?.name || 'nexaPME'}
+          onLogout={() => setShowLogoutModal(true)}
+          onExitApp={() => setShowLogoutModal(true)}
+        />
+      )}
       
       <header className="lg:hidden bg-slate-900 text-white p-4 flex items-center justify-between sticky top-0 z-40">
-        <button onClick={() => setIsSidebarOpen(true)} className="p-2"><Menu size={24} /></button>
-        <Branding companyName={companyConfig?.name || 'nexaPME'} category="Cloud Control" size="sm" />
+        {!isAdminRoot ? (
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2"><Menu size={24} /></button>
+        ) : <div className="w-10"></div>}
+        <Branding companyName={isAdminRoot ? "ROOT CONSOLE" : (companyConfig?.name || 'nexaPME')} category={isAdminRoot ? "Cloud Master" : "Cloud Control"} size="sm" />
         <button onClick={() => setShowLogoutModal(true)} className="p-2 bg-rose-500 rounded-lg"><LogOut size={18} /></button>
       </header>
 
@@ -168,18 +179,20 @@ const App: React.FC = () => {
                 <button onClick={() => setShowLogoutModal(false)}><X size={20} /></button>
              </div>
              <div className="p-8 space-y-4">
-                <button 
-                  onClick={() => handleLogoutOption('SWITCH')}
-                  className="w-full p-6 bg-slate-50 hover:bg-emerald-50 border-2 border-slate-100 hover:border-emerald-500 rounded-3xl transition-all flex items-center space-x-4 group"
-                >
-                  <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                    <User size={24} />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-black text-slate-800 text-sm uppercase">Changer d'utilisateur</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Retour au choix du personnel</p>
-                  </div>
-                </button>
+                {!isAdminRoot && (
+                  <button 
+                    onClick={() => handleLogoutOption('SWITCH')}
+                    className="w-full p-6 bg-slate-50 hover:bg-emerald-50 border-2 border-slate-100 hover:border-emerald-500 rounded-3xl transition-all flex items-center space-x-4 group"
+                  >
+                    <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                      <User size={24} />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-black text-slate-800 text-sm uppercase">Changer d'utilisateur</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Retour au choix du personnel</p>
+                    </div>
+                  </button>
+                )}
 
                 <button 
                   onClick={() => handleLogoutOption('EXIT')}
@@ -189,7 +202,7 @@ const App: React.FC = () => {
                     <ExitIcon size={24} />
                   </div>
                   <div className="text-left">
-                    <p className="font-black text-slate-800 text-sm uppercase">Quitter l'entreprise</p>
+                    <p className="font-black text-slate-800 text-sm uppercase">{isAdminRoot ? 'Fermer la console ROOT' : 'Quitter l\'entreprise'}</p>
                     <p className="text-[10px] text-slate-400 font-bold uppercase">Retour à l'accueil licence</p>
                   </div>
                 </button>
@@ -203,7 +216,7 @@ const App: React.FC = () => {
           <Loader2 className="animate-spin text-emerald-500" size={48} />
         </div>
       )}
-      <Chatbot />
+      {!isAdminRoot && <Chatbot />}
     </div>
   );
 };
