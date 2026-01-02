@@ -23,7 +23,6 @@ class StorageService {
   // --- Auth & Session ---
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
     try {
-      // 1. On récupère la liste des PME pour valider la clé
       const allPmes = await ApiService.getAdminPmes();
       const foundPme = allPmes.find((p: any) => p.license_key === key);
 
@@ -42,7 +41,6 @@ class StorageService {
 
       const isRoot = foundPme.license_type === 'ADMIN';
 
-      // 2. Configuration de l'entité
       const companyInfo: CompanyConfig = {
         idUnique: foundPme.id,
         name: foundPme.name,
@@ -58,17 +56,15 @@ class StorageService {
       this.setActiveCompany(foundPme.id);
       this.saveCompanyInfo(companyInfo);
 
-      // 3. Récupération des utilisateurs FILTRÉS par pme_id (seulement si pas ADMIN ROOT)
       if (!isRoot) {
         try {
-          // Appel direct: https://nexaapi.comfortasbl.org/api/users/index.php?pme_id=ID
           const remoteUsers = await ApiService.getUsers(foundPme.id);
           if (remoteUsers && Array.isArray(remoteUsers)) {
             const mappedUsers = remoteUsers.map(u => ({
               id: u.id,
               name: u.name,
               role: u.role,
-              pin: '', // Le PIN reste sur le serveur
+              pin: '',
               permissions: typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions
             }));
             this.saveUsers(mappedUsers);
@@ -95,10 +91,15 @@ class StorageService {
     }
   }
 
-  async loginRemote(pme_id: string, user_id: string, pin: string) {
+  async loginRemote(name: string, pin: string) {
     if (!pin) throw new Error("Code PIN requis");
-    const res = await ApiService.login(pme_id, user_id, pin);
-    localStorage.setItem('nexapme_jwt', res.token);
+    // On passe le nom et le PIN à l'API
+    const res = await ApiService.login(name, pin);
+    
+    // Si l'API renvoie un token, on le stocke (optionnel selon le script PHP)
+    if (res.token) {
+      localStorage.setItem('nexapme_jwt', res.token);
+    }
     
     const user: UserProfile = { 
       id: res.user.id, 
@@ -109,7 +110,7 @@ class StorageService {
     };
     
     this.setCurrentUser(user);
-    return { user, token: res.token };
+    return { user };
   }
 
   // --- Session & Cache Helpers ---

@@ -43,8 +43,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onExit, companyName, category })
       setError('');
       
       try {
-        const pmeId = storageService.getActiveCompanyId() || '';
-        const authData = await storageService.loginRemote(pmeId, selectedUser.id, pinToUse);
+        // Nouvelle version : l'API attend Nom et PIN
+        const authData = await storageService.loginRemote(selectedUser.name, pinToUse);
         
         if (authData) {
           onLogin(authData.user);

@@ -98,7 +98,12 @@ export class ApiService {
   }
 
   static validateLicense(key: string) { return this.request<any>('/auth/validate-license.php', 'POST', { license_key: key }); }
-  static login(pme_id: string, user_id: string, pin: string) { return this.request<any>('/auth/login.php', 'POST', { pme_id, user_id, pin }); }
+  
+  // Nouveau endpoint de connexion basé sur Nom + PIN
+  static login(name: string, pin: string) { 
+    return this.request<any>('/users/login.php', 'POST', { name, pin }); 
+  }
+
   static getStock(pme_id: string) { return this.request<any[]>('/stock/index.php', 'GET', { pme_id }); }
   static saveProduct(data: any) { return this.request<any>('/stock/create.php', 'POST', data); }
   static createSale(saleData: any) { return this.request<any>('/sales/create.php', 'POST', saleData); }
@@ -110,7 +115,6 @@ export class ApiService {
   static deleteAdminPme(id: string) { return this.request<any>('/admin/pme/delete.php', 'POST', { id }); }
   static getPmeDetails(id: string) { return this.request<any>('/admin/pme/show.php', 'GET', { id }); }
 
-  // --- CRUD USERS (Étape 2) ---
   static getUsers(pme_id: string) { return this.request<any[]>('/users/index.php', 'GET', { pme_id }); }
   static getUserDetails(id: string) { return this.request<any>('/users/show.php', 'GET', { id }); }
   static createUser(data: any) { return this.request<any>('/users/create.php', 'POST', data); }
