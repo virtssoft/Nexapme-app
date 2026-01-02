@@ -67,7 +67,11 @@ export class ApiService {
       options.body = JSON.stringify(payload);
     } else {
       const urlObj = new URL(url);
-      Object.keys(data).forEach(key => urlObj.searchParams.append(key, String(data[key])));
+      Object.keys(data).forEach(key => {
+        if (data[key] !== undefined && data[key] !== null) {
+          urlObj.searchParams.append(key, String(data[key]));
+        }
+      });
       return this.executeFetch<T>(urlObj.toString(), options);
     }
     
@@ -99,22 +103,32 @@ export class ApiService {
 
   static validateLicense(key: string) { return this.request<any>('/auth/validate-license.php', 'POST', { license_key: key }); }
   
-  // Nouveau endpoint de connexion basé sur Nom + PIN
   static login(name: string, pin: string) { 
     return this.request<any>('/users/login.php', 'POST', { name, pin }); 
   }
 
+  // Stock
   static getStock(pme_id: string) { return this.request<any[]>('/stock/index.php', 'GET', { pme_id }); }
   static saveProduct(data: any) { return this.request<any>('/stock/create.php', 'POST', data); }
+  static transformStock(source_id: string, target_id: string, quantity: number) { 
+    return this.request<any>('/stock/transform.php', 'POST', { source_id, target_id, quantity }); 
+  }
+
+  // Sales
   static createSale(saleData: any) { return this.request<any>('/sales/create.php', 'POST', saleData); }
   static getSales(pme_id: string) { return this.request<any[]>('/sales/history.php', 'GET', { pme_id }); }
   
+  // Dashboard
+  static getDashboardStats(pme_id: string) { return this.request<any>('/dashboard/stats.php', 'GET', { pme_id }); }
+
+  // Admin
   static getAdminPmes() { return this.request<any[]>('/admin/pme/index.php', 'GET'); }
   static createAdminPme(data: any) { return this.request<any>('/admin/pme/create.php', 'POST', data); }
   static updateAdminPme(data: any) { return this.request<any>('/admin/pme/update.php', 'POST', data); }
   static deleteAdminPme(id: string) { return this.request<any>('/admin/pme/delete.php', 'POST', { id }); }
   static getPmeDetails(id: string) { return this.request<any>('/admin/pme/show.php', 'GET', { id }); }
 
+  // Users
   static getUsers(pme_id: string) { return this.request<any[]>('/users/index.php', 'GET', { pme_id }); }
   static getUserDetails(id: string) { return this.request<any>('/users/show.php', 'GET', { id }); }
   static createUser(data: any) { return this.request<any>('/users/create.php', 'POST', data); }

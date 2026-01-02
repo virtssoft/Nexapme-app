@@ -93,10 +93,8 @@ class StorageService {
 
   async loginRemote(name: string, pin: string) {
     if (!pin) throw new Error("Code PIN requis");
-    // On passe le nom et le PIN à l'API
     const res = await ApiService.login(name, pin);
     
-    // Si l'API renvoie un token, on le stocke (optionnel selon le script PHP)
     if (res.token) {
       localStorage.setItem('nexapme_jwt', res.token);
     }
@@ -124,6 +122,21 @@ class StorageService {
   saveUsers(users: UserProfile[]) { localStorage.setItem(`nexapme_users_list_${this.currentPmeId}`, JSON.stringify(users)); }
   getDefaultPermissions(role: string): View[] { return role === 'MANAGER' ? Object.values(View) : [View.DASHBOARD, View.SALES, View.STOCK, View.HISTORY]; }
 
+  // --- Dashboard ---
+  async fetchDashboardStats() {
+    if (!this.currentPmeId) return null;
+    try {
+      const stats = await ApiService.getDashboardStats(this.currentPmeId);
+      return {
+        dailySales: parseFloat(stats.daily_sales || 0),
+        stockAlerts: parseInt(stats.stock_alerts || 0),
+        cashBalance: parseFloat(stats.cash_balance || 0)
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
   // --- Stock & Sales ---
   getStock(): StockItem[] { if (!this.currentPmeId) return []; const cache = localStorage.getItem(`cache_stock_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
   async fetchStock(): Promise<StockItem[]> {
@@ -148,9 +161,21 @@ class StorageService {
   }
 
   async saveStockItem(item: Partial<StockItem>) {
-    const payload = { id: item.id || this.generateUUID(), pme_id: this.currentPmeId, designation: item.designation, quantity: item.quantity, unit: item.unit, retail_price: item.retailPrice };
+    const payload = { 
+      id: item.id || this.generateUUID(), 
+      pme_id: this.currentPmeId, 
+      designation: item.designation, 
+      quantity: item.quantity, 
+      unit: item.unit, 
+      retail_price: item.retailPrice 
+    };
     await ApiService.saveProduct(payload);
     await this.fetchStock(); 
+  }
+
+  async transformProduct(sourceId: string, targetId: string, quantity: number) {
+    await ApiService.transformStock(sourceId, targetId, quantity);
+    await this.fetchStock();
   }
 
   getSales(): Sale[] { if (!this.currentPmeId) return []; const cache = localStorage.getItem(`cache_sales_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
@@ -158,14 +183,26 @@ class StorageService {
     if (!this.currentPmeId) return [];
     try {
       const data = await ApiService.getSales(this.currentPmeId);
-      const sales = data.map((s: any) => ({ ...s, date: s.sale_date || s.date, total: parseFloat(s.total || 0) }));
+      const sales = data.map((s: any) => ({ 
+        ...s, 
+        date: s.sale_date || s.date, 
+        total: parseFloat(s.total || 0),
+        items: s.items ? (typeof s.items === 'string' ? JSON.parse(s.items) : s.items) : []
+      }));
       localStorage.setItem(`cache_sales_${this.currentPmeId}`, JSON.stringify(sales));
       return sales;
     } catch (e) { return this.getSales(); }
   }
 
   async addSale(sale: Sale) {
-    const payload = { id: sale.id || this.generateUUID(), pme_id: this.currentPmeId, user_id: this.getCurrentUser()?.id, payment_type: sale.paymentType, customer_name: sale.customerName || 'Client Comptant', items: sale.items.map(it => ({ item_id: it.itemId, quantity: it.quantity })) };
+    const payload = { 
+      id: sale.id || this.generateUUID(), 
+      pme_id: this.currentPmeId, 
+      user_id: this.getCurrentUser()?.id, 
+      payment_type: sale.paymentType, 
+      customer_name: sale.customerName || 'Client Comptant', 
+      items: sale.items.map(it => ({ item_id: it.itemId, quantity: it.quantity })) 
+    };
     await ApiService.createSale(payload);
     localStorage.removeItem(`cache_stock_${this.currentPmeId}`);
     localStorage.removeItem(`cache_sales_${this.currentPmeId}`);
@@ -218,7 +255,22 @@ class StorageService {
   saveQuotes(q: any) { localStorage.setItem(`nexapme_quotes_${this.currentPmeId}`, JSON.stringify(q)); }
   getSubCategories() { return JSON.parse(localStorage.getItem(`nexapme_subcategories_${this.currentPmeId}`) || '[]'); }
   saveSubCategories(s: any) { localStorage.setItem(`nexapme_subcategories_${this.currentPmeId}`, JSON.stringify(s)); }
-  getWeeklySalesData() { return []; }
+  
+  getWeeklySalesData() {
+    const sales = this.getSales();
+    const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const now = new Date();
+    
+    return days.map((day, index) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1) + index);
+      const dateStr = d.toISOString().split('T')[0];
+      const amount = sales
+        .filter(s => s.date.startsWith(dateStr))
+        .reduce((acc, s) => acc + s.total, 0);
+      return { name: day, amount };
+    });
+  }
 
   exportAllDataAsJSON() {
     if (!this.currentPmeId) return;
