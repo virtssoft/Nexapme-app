@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { storageService } from '../services/StorageService';
 import { UserProfile } from '../types';
 import Branding from '../components/Branding';
-import { Lock, User, ArrowRight, Loader2, LogOut as ExitIcon, ChevronLeft } from 'lucide-react';
+import { Lock, User, ArrowRight, Loader2, LogOut as ExitIcon, ChevronLeft, RefreshCw } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: UserProfile) => void;
@@ -13,29 +13,47 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, onExit, companyName, category }) => {
+  const [users, setUsers] = useState<UserProfile[]>(storageService.getUsers());
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const users = storageService.getUsers();
 
-  const handleLogin = async () => {
-    if (selectedUser && pin.length === 4) {
+  // Sync users on mount to get latest data from Cloud
+  useEffect(() => {
+    const syncUsers = async () => {
+      setIsLoadingUsers(true);
+      try {
+        const remoteUsers = await storageService.fetchUsers();
+        if (remoteUsers) setUsers(remoteUsers);
+      } catch (e) {
+        console.warn("Utilisation de la liste locale (Cloud injoignable)");
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+    syncUsers();
+  }, []);
+
+  const handleLogin = async (overridePin?: string) => {
+    const pinToUse = overridePin || pin;
+    if (selectedUser && pinToUse.length === 4) {
       setIsLoggingIn(true);
       setError('');
       
       try {
         const pmeId = storageService.getActiveCompanyId() || '';
-        const authData = await storageService.loginRemote(pmeId, selectedUser.id, pin);
+        const authData = await storageService.loginRemote(pmeId, selectedUser.id, pinToUse);
         
         if (authData) {
           onLogin(authData.user);
         } else {
-          setError('PIN incorrect');
+          setError('Code PIN incorrect');
           setPin('');
         }
       } catch (e: any) {
-        setError(e.message || 'Erreur d\'authentification');
+        setError(e.message || 'Erreur d\'identification');
         setPin('');
       } finally {
         setIsLoggingIn(false);
@@ -61,7 +79,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, onExit, companyName, category })
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="text-center space-y-1">
                 <h3 className="font-black text-slate-800 uppercase text-xs tracking-[0.2em]">Sélection du personnel</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase">Choisissez votre compte pour continuer</p>
+                <div className="flex items-center justify-center space-x-2">
+                   {isLoadingUsers ? (
+                     <div className="flex items-center space-x-2 text-emerald-500">
+                        <RefreshCw size={10} className="animate-spin" />
+                        <p className="text-[9px] font-black uppercase tracking-widest">Synchro Cloud...</p>
+                     </div>
+                   ) : (
+                     <p className="text-[10px] text-slate-400 font-bold uppercase">Choisissez votre compte pour continuer</p>
+                   )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 max-h-[350px] overflow-y-auto no-scrollbar pr-1">
@@ -83,6 +110,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onExit, companyName, category })
                     <ArrowRight size={18} className="text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
                   </button>
                 ))}
+                {!isLoadingUsers && users.length === 0 && (
+                  <div className="py-10 text-center space-y-2">
+                    <p className="text-xs font-black text-slate-400 uppercase">Aucun compte trouvé</p>
+                    <p className="text-[9px] text-slate-400 leading-relaxed">Le gérant doit créer des accès dans la console nexaROOT.</p>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-100">
@@ -135,9 +168,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onExit, companyName, category })
                       setPin(val);
                       if (val.length === 4) {
                         setError('');
-                        // Trigger login automatically when 4 digits are entered
-                        // setTimeout for better UX
-                        if (val.length === 4) setTimeout(handleLogin, 100);
+                        handleLogin(val);
                       }
                     }}
                     autoFocus
@@ -151,7 +182,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onExit, companyName, category })
                 )}
 
                 <button 
-                  onClick={handleLogin}
+                  onClick={() => handleLogin()}
                   disabled={pin.length < 4 || isLoggingIn}
                   className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-black hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
                 >
@@ -163,7 +194,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onExit, companyName, category })
         </div>
       </div>
       
-      {/* Footer support */}
       <div className="absolute bottom-6 left-0 w-full text-center px-4">
         <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em]">nexaPME Security Protocol v2.5</p>
       </div>

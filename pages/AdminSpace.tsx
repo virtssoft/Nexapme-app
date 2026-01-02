@@ -82,7 +82,6 @@ const AdminSpace: React.FC = () => {
 
   // --- Helpers ID Génération ---
   
-  // Pour les PME on garde l'incrémental car géré manuellement
   const getNextAvailableId = (prefix: string, list: any[]) => {
     const nums = list
       .map(item => {
@@ -94,9 +93,12 @@ const AdminSpace: React.FC = () => {
     return `${prefix}-${(max + 1).toString().padStart(4, '0')}`;
   };
 
-  // NOUVEAU: Génération aléatoire pour les Utilisateurs (Demande utilisateur)
   const generateRandomUserId = () => {
-    const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclut O, 0, I, 1
+    let randomPart = '';
+    for (let i = 0; i < 6; i++) {
+      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
     return `USR-${randomPart}`;
   };
 
@@ -147,17 +149,12 @@ const AdminSpace: React.FC = () => {
       await loadPmes();
       setCurrentView('LIST');
     } catch (e: any) {
-      if (e.message.includes("1062") || e.message.includes("Duplicate")) {
-        alert("Erreur: L'ID " + pmeFormData.id + " existe déjà. Utilisez le bouton rafraîchir.");
-      } else {
-        alert("Erreur PME: " + e.message);
-      }
+      alert("Erreur PME: " + e.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Added missing handleDeletePme function to handle PME deletion
   const handleDeletePme = async (id: string) => {
     if (!confirm("Voulez-vous vraiment supprimer cette PME ? Cette action est irréversible.")) return;
     setIsLoading(true);
@@ -192,7 +189,11 @@ const AdminSpace: React.FC = () => {
 
   const goToEditUser = (user: any) => {
     setEditingUser(user);
-    setUserFormData({ ...user, pin: '' });
+    setUserFormData({ 
+      ...user, 
+      pin: '', 
+      permissions: typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions 
+    });
     setCurrentView('USER_FORM');
   };
 
@@ -209,7 +210,8 @@ const AdminSpace: React.FC = () => {
         await ApiService.updateUser({
           id: userFormData.id,
           name: userFormData.name,
-          role: userFormData.role
+          role: userFormData.role,
+          permissions: JSON.stringify(userFormData.permissions)
         });
       } else {
         await ApiService.createUser({
@@ -224,12 +226,7 @@ const AdminSpace: React.FC = () => {
       await loadUsersForPme(selectedPmeForUsers.id);
       setCurrentView('USER_LIST');
     } catch (e: any) {
-      if (e.message.includes("1062") || e.message.includes("Duplicate")) {
-        alert("ID déjà utilisé. Regénération d'un nouvel identifiant aléatoire...");
-        setUserFormData(prev => ({ ...prev, id: generateRandomUserId() }));
-      } else {
-        alert("Erreur Utilisateur : " + e.message);
-      }
+      alert("Erreur Utilisateur : " + e.message);
     } finally {
       setIsUserActionLoading(false);
     }
@@ -269,7 +266,6 @@ const AdminSpace: React.FC = () => {
 
   // --- Views ---
 
-  // VIEW: LIST
   if (currentView === 'LIST') {
     return (
       <div className="space-y-8 view-transition">
@@ -345,7 +341,6 @@ const AdminSpace: React.FC = () => {
     );
   }
 
-  // VIEW: PME_FORM
   if (currentView === 'PME_FORM') {
     return (
       <div className="max-w-4xl mx-auto space-y-8 view-transition">
@@ -397,20 +392,6 @@ const AdminSpace: React.FC = () => {
                   ))}
                 </div>
               </div>
-              {pmeFormData.license_type === 'NORMAL' && (
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase px-2 tracking-widest">Durée de validité (Mois)</label>
-                  <div className="flex bg-slate-100 p-1.5 rounded-[1.8rem]">
-                    {['6', '12', '24'].map(m => (
-                      <button key={m} onClick={() => setPmeFormData({...pmeFormData, expiry_months: m as any})} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase transition-all ${pmeFormData.expiry_months === m ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}>{m} Mois</button>
-                    ))}
-                  </div>
-                  <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-[2rem] text-center">
-                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Expiration Prévue</p>
-                    <p className="text-xl font-black text-emerald-700">{calculateExpiry(pmeFormData.expiry_months)}</p>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="pt-10 flex flex-col md:flex-row gap-4 border-t border-slate-50">
                <button onClick={() => setCurrentView('LIST')} className="flex-1 py-6 rounded-[2rem] border-2 border-slate-200 text-slate-400 font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-50">Annuler</button>
@@ -425,7 +406,6 @@ const AdminSpace: React.FC = () => {
     );
   }
 
-  // VIEW: USER_LIST
   if (currentView === 'USER_LIST' && selectedPmeForUsers) {
     return (
       <div className="max-w-6xl mx-auto space-y-10 view-transition pb-24">
@@ -472,7 +452,6 @@ const AdminSpace: React.FC = () => {
     );
   }
 
-  // VIEW: USER_FORM
   if (currentView === 'USER_FORM' && selectedPmeForUsers) {
     return (
       <div className="max-w-4xl mx-auto space-y-8 view-transition">
