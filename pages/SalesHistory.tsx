@@ -209,7 +209,7 @@ const SalesHistory: React.FC = () => {
             <div className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-start justify-between">
               <div className="space-y-1">
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Chiffre d'Affaires</p>
-                <h3 className="text-2xl font-black text-slate-900 tracking-tight">{reportStats.total.toLocaleString()} FC</h3>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">{storageService.formatFC(reportStats.total)}</h3>
                 <p className="text-[9px] text-emerald-500 font-black uppercase mt-2 flex items-center space-x-1">
                   <TrendingUp size={12} /> <span>Période sélectionnée</span>
                 </p>
@@ -233,7 +233,7 @@ const SalesHistory: React.FC = () => {
             <div className="bg-white p-7 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-start justify-between">
               <div className="space-y-1">
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Panier Moyen</p>
-                <h3 className="text-2xl font-black text-slate-900 tracking-tight">{Math.round(reportStats.avg).toLocaleString()} FC</h3>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">{storageService.formatFC(Math.round(reportStats.avg))}</h3>
                 <p className="text-[9px] text-amber-500 font-black uppercase mt-2">Dépense par client</p>
               </div>
               <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl shadow-inner">
@@ -264,7 +264,7 @@ const SalesHistory: React.FC = () => {
                   
                   <div className="flex items-center space-x-8">
                     <div className="text-right">
-                      <p className="font-black text-slate-900 text-lg">{sale.total.toLocaleString()} FC</p>
+                      <p className="font-black text-slate-900 text-lg">{storageService.formatFC(sale.total)}</p>
                       <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Archivé</p>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -291,15 +291,15 @@ const SalesHistory: React.FC = () => {
                           <div key={idx} className="flex justify-between items-center text-sm">
                             <div className="flex-1">
                               <p className="font-black text-slate-700 uppercase text-xs">{item.designation}</p>
-                              <p className="text-[10px] text-slate-400 font-bold">{item.quantity} x {parseFloat(item.unitPrice || 0).toLocaleString()} FC</p>
+                              <p className="text-[10px] text-slate-400 font-bold">{item.quantity} x {storageService.formatFC(parseFloat(item.unitPrice || 0))}</p>
                             </div>
-                            <span className="font-black text-slate-900">{parseFloat(item.total || 0).toLocaleString()} FC</span>
+                            <span className="font-black text-slate-900">{storageService.formatFC(parseFloat(item.total || 0))}</span>
                           </div>
                         )) : <p className="text-center text-[10px] text-slate-400 font-bold py-2 uppercase tracking-widest italic">Chargement des détails non disponible en vue réduite.</p>}
                       </div>
                       <div className="pt-3 mt-3 border-t border-slate-200 flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
                         <span>Opérateur: {sale.author}</span>
-                        <span>Total: {sale.total.toLocaleString()} FC</span>
+                        <span>Total: {storageService.formatFC(sale.total)}</span>
                       </div>
                     </div>
                   </div>
@@ -355,7 +355,7 @@ const SalesHistory: React.FC = () => {
                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   <div className="p-8 rounded-[2.5rem] bg-slate-50 border border-slate-100 space-y-2">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Chiffre d'Affaires Brut</p>
-                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter">{reportStats.total.toLocaleString()} FC</h2>
+                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter">{storageService.formatFC(reportStats.total)}</h2>
                     <p className="text-xs text-slate-400 font-bold uppercase">{storageService.formatUSD(reportStats.total)}</p>
                   </div>
                   <div className="p-8 rounded-[2.5rem] bg-slate-50 border border-slate-100 space-y-2">
@@ -365,7 +365,7 @@ const SalesHistory: React.FC = () => {
                   </div>
                   <div className="p-8 rounded-[2.5rem] bg-slate-50 border border-slate-100 space-y-2">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dépense Moyenne / Client</p>
-                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter">{Math.round(reportStats.avg).toLocaleString()} FC</h2>
+                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter">{storageService.formatFC(Math.round(reportStats.avg))}</h2>
                     <p className="text-xs text-slate-400 font-bold uppercase">Performance de vente</p>
                   </div>
                </div>
@@ -381,7 +381,7 @@ const SalesHistory: React.FC = () => {
                             <span className="font-black text-slate-700 uppercase text-xs">{p.name}</span>
                           </div>
                           <div className="text-right">
-                             <p className="font-black text-slate-900 text-sm">{p.total.toLocaleString()} FC</p>
+                             <p className="font-black text-slate-900 text-sm">{storageService.formatFC(p.total)}</p>
                              <p className="text-[9px] text-slate-400 font-bold uppercase">{p.qty} unités vendues</p>
                           </div>
                         </div>
@@ -393,13 +393,13 @@ const SalesHistory: React.FC = () => {
                   <div className="space-y-6">
                     <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b-2 border-slate-900 pb-2">Résumé des Modes de Paiement</h4>
                     <div className="p-6 bg-white border border-slate-100 rounded-3xl space-y-4 shadow-sm">
-                       {['CASH', 'MOBILE_MONEY', 'CREDIT', 'MIXED'].map(m => {
+                       {['CASH', 'MOBILE_MONEY', 'CREDIT', 'MIXED'].map((m: string) => {
                          const amount = filteredSales.filter(s => s.paymentType === m).reduce((acc, s) => acc + s.total, 0);
                          if (amount === 0) return null;
                          return (
                            <div key={m} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0">
                              <span className="text-[10px] font-black text-slate-400 uppercase">{m.replace('_', ' ')}</span>
-                             <span className="font-black text-slate-800">{amount.toLocaleString()} FC</span>
+                             <span className="font-black text-slate-800">{storageService.formatFC(amount)}</span>
                            </div>
                          );
                        }).filter(el => el !== null)}

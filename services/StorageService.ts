@@ -20,6 +20,12 @@ class StorageService {
     return crypto.randomUUID();
   }
 
+  // --- Notification System ---
+  // Permet d'avertir les composants que les données ont changé sans tout recharger
+  private notifyDataChanged() {
+    window.dispatchEvent(new CustomEvent('nexa_data_updated'));
+  }
+
   // --- Auth ---
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
     try {
@@ -76,7 +82,11 @@ class StorageService {
   }
 
   // --- Stock ---
-  getStock(): StockItem[] { if (!this.currentPmeId) return []; const cache = localStorage.getItem(`cache_stock_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
+  getStock(): StockItem[] { 
+    if (!this.currentPmeId) return []; 
+    const cache = localStorage.getItem(`cache_stock_${this.currentPmeId}`); 
+    return cache ? JSON.parse(cache) : []; 
+  }
   
   async fetchStock(): Promise<StockItem[]> {
     if (!this.currentPmeId) return [];
@@ -96,31 +106,27 @@ class StorageService {
         isWholesale: item.is_wholesale === "1" || item.is_wholesale === 1
       }));
       localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(stock));
+      this.notifyDataChanged();
       return stock;
-    } catch (e) { return this.getStock(); }
-  }
-
-  async fetchInventory(type?: 'wholesale' | 'retail'): Promise<StockItem[]> {
-    if (!this.currentPmeId) return [];
-    try {
-      const data = await ApiService.getInventory(this.currentPmeId, type);
-      return data.map((item: any) => ({
-        id: item.id,
-        designation: item.designation,
-        quantity: parseFloat(item.quantity),
-        unit: item.unit,
-        retailPrice: parseFloat(item.retail_price || 0),
-        wholesalePrice: parseFloat(item.wholesale_price || 0),
-        purchasePrice: parseFloat(item.purchase_price || 0),
-        alertThreshold: parseFloat(item.alert_threshold || 5),
-        category: item.category || 'Général',
-        isWholesale: item.is_wholesale === "1" || item.is_wholesale === 1
-      }));
-    } catch (e) { return []; }
+    } catch (e) { 
+      return this.getStock(); 
+    }
   }
 
   async saveStockItem(item: Partial<StockItem>) {
     if (!this.currentPmeId) return;
+
+    // MISE À JOUR OPTIMISTE DU CACHE LOCAL
+    const currentStock = this.getStock();
+    let updatedStock;
+    if (item.id) {
+      updatedStock = currentStock.map(s => s.id === item.id ? { ...s, ...item } : s);
+    } else {
+      const tempId = 'temp-' + Date.now();
+      updatedStock = [{ ...item, id: tempId } as StockItem, ...currentStock];
+    }
+    localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(updatedStock));
+    this.notifyDataChanged();
 
     const payload = {
       designation: item.designation,
@@ -132,33 +138,90 @@ class StorageService {
       retail_price: item.retailPrice || 0,
       wholesale_price: item.wholesalePrice || 0,
       is_wholesale: item.isWholesale ? 1 : 0,
-      alert_threshold: item.alertThreshold || 5,
+      alert_threshold: item.alert_threshold || 5,
       pme_id: this.currentPmeId
     };
 
-    if (item.id) {
-      await ApiService.updateProduct(item.id, this.currentPmeId, payload);
-    } else {
-      await ApiService.createProduct(payload);
+    try {
+      if (item.id && !item.id.startsWith('temp-')) {
+        await ApiService.updateProduct(item.id, this.currentPmeId, payload);
+      } else {
+        await ApiService.createProduct(payload);
+      }
+      // Rafraîchissement silencieux en arrière-plan
+      this.fetchStock(); 
+    } catch (e) {
+      console.error("Sync failed, but local data is preserved");
+      throw e;
     }
-    await this.fetchStock(); 
   }
 
   async deleteStockItem(id: string) {
     if (!this.currentPmeId) return;
-    await ApiService.deleteProduct(id, this.currentPmeId);
-    await this.fetchStock();
+    
+    // Suppression locale immédiate
+    const updated = this.getStock().filter(s => s.id !== id);
+    localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(updated));
+    this.notifyDataChanged();
+
+    try {
+      await ApiService.deleteProduct(id, this.currentPmeId);
+    } catch (e) {
+      this.fetchStock(); // Rollback if error
+    }
   }
 
+  // --- Fix: Property 'transformProduct' does not exist on type 'StorageService'
   async transformProduct(fromId: string, toId: string, quantity: number, factor: number) {
     if (!this.currentPmeId) return;
     await ApiService.transformStock(this.currentPmeId, fromId, toId, quantity, factor);
-    await this.fetchStock();
+    await this.fetchStock(); 
+  }
+
+  // --- Fix: Property 'fetchInventory' does not exist on type 'StorageService'
+  async fetchInventory(type?: 'wholesale' | 'retail'): Promise<StockItem[]> {
+    if (!this.currentPmeId) return [];
+    try {
+      const data = await ApiService.getInventory(this.currentPmeId, type);
+      const stock = data.map((item: any) => ({
+        id: item.id,
+        designation: item.designation,
+        quantity: parseFloat(item.quantity),
+        unit: item.unit,
+        retailPrice: parseFloat(item.retail_price || 0),
+        wholesalePrice: parseFloat(item.wholesale_price || 0),
+        purchasePrice: parseFloat(item.purchase_price || 0),
+        alertThreshold: parseFloat(item.alert_threshold || 5),
+        category: item.category || 'Général',
+        subCategory: item.sub_category || '',
+        isWholesale: item.is_wholesale === "1" || item.is_wholesale === 1
+      }));
+      return stock;
+    } catch (e) { 
+      return this.getStock().filter(i => type === 'wholesale' ? i.isWholesale : !i.isWholesale);
+    }
   }
 
   // --- Sales ---
   async addSale(sale: Sale) {
     if (!this.currentPmeId) return;
+
+    // 1. MISE À JOUR OPTIMISTE DU STOCK LOCAL (TRÈS IMPORTANT POUR LA VITESSE)
+    const stock = this.getStock();
+    const updatedStock = stock.map(item => {
+      const saleItem = sale.items.find(si => si.itemId === item.id);
+      if (saleItem) {
+        return { ...item, quantity: item.quantity - saleItem.quantity };
+      }
+      return item;
+    });
+    localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(updatedStock));
+
+    // 2. MISE À JOUR LOCALE DE L'HISTORIQUE DES VENTES
+    const currentSales = this.getSales();
+    localStorage.setItem(`cache_sales_${this.currentPmeId}`, JSON.stringify([sale, ...currentSales]));
+    
+    this.notifyDataChanged();
 
     const payload = { 
       sale_id: sale.id || this.generateUUID(), 
@@ -177,26 +240,31 @@ class StorageService {
 
     try {
       await ApiService.createSale(payload);
-      localStorage.removeItem(`cache_stock_${this.currentPmeId}`);
-      localStorage.removeItem(`cache_sales_${this.currentPmeId}`);
-      await this.fetchStock();
-    } catch (e) { throw e; }
+      // Synchro silencieuse en arrière-plan pour confirmer les chiffres exacts
+      setTimeout(() => {
+        this.fetchStock();
+        this.fetchSales();
+      }, 1000);
+    } catch (e) { 
+      throw e; 
+    }
   }
 
-  getSales(): Sale[] { if (!this.currentPmeId) return []; const cache = localStorage.getItem(`cache_sales_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
+  getSales(): Sale[] { 
+    if (!this.currentPmeId) return []; 
+    const cache = localStorage.getItem(`cache_sales_${this.currentPmeId}`); 
+    return cache ? JSON.parse(cache) : []; 
+  }
   
   async fetchSales(from?: string, to?: string): Promise<Sale[]> {
     if (!this.currentPmeId) return [];
     try {
       const data = await ApiService.getSales(this.currentPmeId, from, to);
       const sales: Sale[] = data.map((s: any) => {
-        // Traitement sécurisé des items (souvent chaîne JSON côté PHP)
         let parsedItems = [];
         try {
           parsedItems = s.items ? (typeof s.items === 'string' ? JSON.parse(s.items) : s.items) : [];
-        } catch (e) {
-          console.warn("Erreur parsing items vente", s.id);
-        }
+        } catch (e) {}
 
         return { 
           id: s.id, 
@@ -218,8 +286,11 @@ class StorageService {
         };
       });
       localStorage.setItem(`cache_sales_${this.currentPmeId}`, JSON.stringify(sales));
+      this.notifyDataChanged();
       return sales;
-    } catch (e) { return this.getSales(); }
+    } catch (e) { 
+      return this.getSales(); 
+    }
   }
 
   async fetchDashboardStats() {
@@ -291,29 +362,28 @@ class StorageService {
   getDefaultPermissions(role: string): View[] { return role === 'MANAGER' ? Object.values(View) : [View.DASHBOARD, View.SALES, View.STOCK, View.HISTORY]; }
   getExchangeRate(): number { return Number(localStorage.getItem('nexapme_rate')) || 2850; }
   updateExchangeRate(rate: number) { localStorage.setItem('nexapme_rate', rate.toString()); }
-  // Use any to allow flexible inputs and avoid type inference conflicts in some contexts
   formatFC(amount: any): string { const val = typeof amount === 'number' ? amount : parseFloat(amount || 0); return new Intl.NumberFormat('fr-FR').format(val) + ' FC'; }
   formatUSD(amountFC: any): string { const rate = this.getExchangeRate(); const val = typeof amountFC === 'number' ? amountFC : parseFloat(amountFC || 0); return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val / rate); }
   getCashFlow(): CashFlow[] { return JSON.parse(localStorage.getItem(`cache_cash_${this.currentPmeId}`) || '[]'); }
   getCashBalance(): number { const flows = this.getCashFlow(); return flows.reduce((acc, f) => f.type === 'IN' ? acc + f.amount : acc - f.amount, 0); }
-  recordCashFlow(amount: number, type: 'IN' | 'OUT', category: string, description: string) { const flows = this.getCashFlow(); const newFlow = { id: this.generateUUID(), date: new Date().toISOString(), type, category, description, amount, author: this.getCurrentUser()?.name || 'system' }; localStorage.setItem(`cache_cash_${this.currentPmeId}`, JSON.stringify([newFlow, ...flows])); }
+  recordCashFlow(amount: number, type: 'IN' | 'OUT', category: string, description: string) { const flows = this.getCashFlow(); const newFlow = { id: this.generateUUID(), date: new Date().toISOString(), type, category, description, amount, author: this.getCurrentUser()?.name || 'system' }; localStorage.setItem(`cache_cash_${this.currentPmeId}`, JSON.stringify([newFlow, ...flows])); this.notifyDataChanged(); }
   getCredits() { return JSON.parse(localStorage.getItem(`gestoalim_credits_${this.currentPmeId}`) || '[]'); }
   async fetchCredits() { return this.getCredits(); }
   async repayCredit(id: string, amount: number) { const credits = this.getCredits().map((c: any) => { if (c.id === id) { const rem = Math.max(0, c.remainingAmount - amount); return { ...c, remainingAmount: rem, status: rem === 0 ? 'PAID' : 'PENDING' }; } return c; }); localStorage.setItem(`gestoalim_credits_${this.currentPmeId}`, JSON.stringify(credits)); this.recordCashFlow(amount, 'IN', 'Remboursement', `Crédit ${id}`); }
   async fetchUsers() { if (!this.currentPmeId) return []; const data = await ApiService.getUsers(this.currentPmeId); const mapped = data.map(u => ({ id: u.id, name: u.name, role: u.role, pin: '', permissions: typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions })); this.saveUsers(mapped); return mapped; }
   getWeeklySalesData() { const sales = this.getSales(); const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']; const now = new Date(); return days.map((day, index) => { const d = new Date(now); d.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1) + index); const dateStr = d.toISOString().split('T')[0]; const amount = sales.filter(s => s.date.startsWith(dateStr)).reduce((acc, s) => acc + s.total, 0); return { name: day, amount }; }); }
   getInventories(): InventoryReport[] { if (!this.currentPmeId) return []; const cache = localStorage.getItem(`cache_inventory_${this.currentPmeId}`); return cache ? JSON.parse(cache) : []; }
-  addInventory(report: InventoryReport) { if (!this.currentPmeId) return; const reports = this.getInventories(); localStorage.setItem(`cache_inventory_${this.currentPmeId}`, JSON.stringify([report, ...reports])); }
-  updateStock(stock: StockItem[]) { if (!this.currentPmeId) return; localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(stock)); }
+  addInventory(report: InventoryReport) { if (!this.currentPmeId) return; const reports = this.getInventories(); localStorage.setItem(`cache_inventory_${this.currentPmeId}`, JSON.stringify([report, ...reports])); this.notifyDataChanged(); }
+  updateStock(stock: StockItem[]) { if (!this.currentPmeId) return; localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(stock)); this.notifyDataChanged(); }
   exportAllDataAsJSON() { if (!this.currentPmeId) return; const data = { config: this.getCompanyInfo(), stock: this.getStock(), sales: this.getSales(), credits: this.getCredits(), cash: this.getCashFlow(), inventory: this.getInventories(), users: this.getUsers(), subcategories: this.getSubCategories() }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `nexapme_export_${this.currentPmeId}.json`; a.click(); URL.revokeObjectURL(url); }
   importDataFromJSON(jsonText: string) { try { const data = JSON.parse(jsonText); if (data.config) this.saveCompanyInfo(data.config); if (data.stock && this.currentPmeId) localStorage.setItem(`cache_stock_${this.currentPmeId}`, JSON.stringify(data.stock)); window.location.reload(); } catch (e) { alert("Erreur importation."); } }
   getOperations() { return JSON.parse(localStorage.getItem(`nexapme_operations_${this.currentPmeId}`) || '[]'); }
-  saveOperations(ops: any) { localStorage.setItem(`nexapme_operations_${this.currentPmeId}`, JSON.stringify(ops)); }
+  saveOperations(ops: any) { localStorage.setItem(`nexapme_operations_${this.currentPmeId}`, JSON.stringify(ops)); this.notifyDataChanged(); }
   getAppointments() { return JSON.parse(localStorage.getItem(`nexapme_appointments_${this.currentPmeId}`) || '[]'); }
-  saveAppointments(a: any) { localStorage.setItem(`nexapme_appointments_${this.currentPmeId}`, JSON.stringify(a)); }
+  saveAppointments(a: any) { localStorage.setItem(`nexapme_appointments_${this.currentPmeId}`, JSON.stringify(a)); this.notifyDataChanged(); }
   getQuotes() { return JSON.parse(localStorage.getItem(`nexapme_quotes_${this.currentPmeId}`) || '[]'); }
-  saveQuotes(q: any) { localStorage.setItem(`nexapme_quotes_${this.currentPmeId}`, JSON.stringify(q)); }
+  saveQuotes(q: any) { localStorage.setItem(`nexapme_quotes_${this.currentPmeId}`, JSON.stringify(q)); this.notifyDataChanged(); }
   getSubCategories() { return JSON.parse(localStorage.getItem(`nexapme_subcategories_${this.currentPmeId}`) || '[]'); }
-  saveSubCategories(s: any) { localStorage.setItem(`nexapme_subcategories_${this.currentPmeId}`, JSON.stringify(s)); }
+  saveSubCategories(s: any) { localStorage.setItem(`nexapme_subcategories_${this.currentPmeId}`, JSON.stringify(s)); this.notifyDataChanged(); }
 }
 export const storageService = new StorageService();

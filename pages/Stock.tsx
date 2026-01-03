@@ -14,8 +14,8 @@ const Stock: React.FC = () => {
   const currentUser = storageService.getCurrentUser();
   const isManager = currentUser?.role === 'MANAGER';
 
-  const [stock, setStock] = useState<StockItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [stock, setStock] = useState<StockItem[]>(storageService.getStock());
+  const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<StockItem>>({});
@@ -29,27 +29,34 @@ const Stock: React.FC = () => {
   const [isTransforming, setIsTransforming] = useState(false);
 
   useEffect(() => {
+    // Premier chargement depuis le cache
+    setStock(storageService.getStock());
+    
+    // Synchro Cloud au montage
     loadStock();
+
+    // Écouteur pour les mises à jour réactives
+    const handleUpdate = () => {
+      setStock(storageService.getStock());
+    };
+    window.addEventListener('nexa_data_updated', handleUpdate);
+    return () => window.removeEventListener('nexa_data_updated', handleUpdate);
   }, []);
 
   const loadStock = async () => {
     setIsLoading(true);
-    const data = await storageService.fetchStock();
-    setStock(data);
+    await storageService.fetchStock();
     setIsLoading(false);
   };
 
   const handleSave = async () => {
     if (!formData.designation) return;
-    setIsLoading(true);
+    // On ferme le modal immédiatement car la mise à jour est déjà gérée localement par StorageService
+    setIsModalOpen(false);
     try {
       await storageService.saveStockItem(formData);
-      await loadStock();
-      setIsModalOpen(false);
     } catch (e: any) {
       alert("Erreur lors de l'enregistrement : " + e.message);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -57,15 +64,11 @@ const Stock: React.FC = () => {
     if (!formData.id || !isManager) return;
     if (!confirm(`Voulez-vous vraiment supprimer définitivement "${formData.designation}" ?`)) return;
     
-    setIsLoading(true);
+    setIsModalOpen(false);
     try {
       await storageService.deleteStockItem(formData.id);
-      await loadStock();
-      setIsModalOpen(false);
     } catch (e: any) {
       alert("Erreur lors de la suppression : " + e.message);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -74,12 +77,8 @@ const Stock: React.FC = () => {
     setIsTransforming(true);
     try {
       await storageService.transformProduct(transformSource.id, transformTargetId, transformQty, transformFactor);
-      await loadStock();
       setIsTransformOpen(false);
       setTransformSource(null);
-      setTransformQty(1);
-      setTransformFactor(50);
-      setTransformTargetId('');
     } catch (e: any) {
       alert("Erreur de transformation : " + e.message);
     } finally {
@@ -120,56 +119,52 @@ const Stock: React.FC = () => {
         <input type="text" placeholder="Rechercher un produit..." className="flex-1 outline-none font-bold text-sm bg-transparent" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
       </div>
 
-      {isLoading && stock.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-          <Loader2 className="animate-spin mb-4" size={48} />
-          <p className="font-black uppercase text-xs tracking-widest">Chargement Cloud...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStock.map(item => (
-            <div key={item.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-emerald-200 transition-all">
-               <div className="flex justify-between mb-4">
-                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${item.isWholesale ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'}`}>
-                   {item.isWholesale ? 'Gros' : 'Détail'}
-                 </span>
-                 <p className={`text-xs font-black flex items-center gap-1 ${item.quantity <= item.alertThreshold ? 'text-rose-500' : 'text-slate-800'}`}>
-                   {item.quantity <= item.alertThreshold && <AlertCircle size={12} />}
-                   {item.quantity} {item.unit}
-                 </p>
-               </div>
-               <h3 className="font-black text-slate-800 text-sm mb-4 leading-tight min-h-[40px] uppercase">{item.designation}</h3>
-               
-               <div className="space-y-2 mb-6">
-                  <div className="flex items-center justify-between p-2 bg-slate-50 rounded-xl">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Prix Détail</span>
-                    <span className="text-sm font-black text-blue-600">{storageService.formatFC(item.retailPrice)}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 bg-emerald-50/50 rounded-xl">
-                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Prix Gros</span>
-                    <span className="text-sm font-black text-emerald-700">{storageService.formatFC(item.wholesalePrice)}</span>
-                  </div>
-               </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredStock.map(item => (
+          <div key={item.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-emerald-200 transition-all">
+             <div className="flex justify-between mb-4">
+               <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${item.isWholesale ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'}`}>
+                 {item.isWholesale ? 'Gros' : 'Détail'}
+               </span>
+               <p className={`text-xs font-black flex items-center gap-1 ${item.quantity <= item.alertThreshold ? 'text-rose-500' : 'text-slate-800'}`}>
+                 {item.quantity <= item.alertThreshold && <AlertCircle size={12} />}
+                 {item.quantity} {item.unit}
+               </p>
+             </div>
+             <h3 className="font-black text-slate-800 text-sm mb-4 leading-tight min-h-[40px] uppercase">{item.designation}</h3>
+             
+             <div className="space-y-2 mb-6">
+                <div className="flex items-center justify-between p-2 bg-slate-50 rounded-xl">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Prix Détail</span>
+                  <span className="text-sm font-black text-blue-600">{storageService.formatFC(item.retailPrice)}</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-emerald-50/50 rounded-xl">
+                  <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Prix Gros</span>
+                  <span className="text-sm font-black text-emerald-700">{storageService.formatFC(item.wholesalePrice)}</span>
+                </div>
+             </div>
 
-               <div className="flex justify-between items-center pt-2 border-t border-slate-50">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{item.category}</p>
-                  <div className="flex space-x-1">
-                    {item.isWholesale && isManager && (
-                      <button 
-                        onClick={() => { setTransformSource(item); setIsTransformOpen(true); }}
-                        className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all"
-                        title="Désaler Gros vers Détail"
-                      >
-                        <Layers size={18} />
-                      </button>
-                    )}
-                    <button onClick={() => { setFormData(item); setIsModalOpen(true); }} className="p-2 text-slate-300 hover:text-blue-600 transition-all"><Edit2 size={18} /></button>
-                  </div>
-               </div>
-            </div>
-          ))}
-        </div>
-      )}
+             <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{item.category}</p>
+                <div className="flex space-x-1">
+                  {item.isWholesale && isManager && (
+                    <button 
+                      onClick={() => { setTransformSource(item); setIsTransformOpen(true); }}
+                      className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all"
+                      title="Désaler Gros vers Détail"
+                    >
+                      <Layers size={18} />
+                    </button>
+                  )}
+                  <button onClick={() => { setFormData(item); setIsModalOpen(true); }} className="p-2 text-slate-300 hover:text-blue-600 transition-all"><Edit2 size={18} /></button>
+                </div>
+             </div>
+          </div>
+        ))}
+        {!isLoading && filteredStock.length === 0 && (
+          <div className="col-span-full py-20 text-center text-slate-300 uppercase font-black text-xs tracking-widest">Aucun article dans cette liste</div>
+        )}
+      </div>
 
       {/* Modal CRUD Produit */}
       {isModalOpen && (
@@ -243,7 +238,6 @@ const Stock: React.FC = () => {
                 </button>
               )}
               <button onClick={handleSave} disabled={isLoading} className="flex-1 py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all hover:bg-emerald-700 disabled:opacity-50">
-                {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
                 {formData.id ? 'Mettre à jour Cloud' : 'Enregistrer sur le Serveur'}
               </button>
             </div>
@@ -312,15 +306,6 @@ const Stock: React.FC = () => {
                     />
                   </div>
                 </div>
-              </div>
-
-              <div className="p-6 bg-slate-900 rounded-[1.5rem] text-center space-y-2">
-                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Résultat de l'opération</p>
-                  <div className="flex items-center justify-center space-x-3">
-                     <span className="text-white font-bold">-{transformQty} Gros</span>
-                     <ArrowRight size={14} className="text-slate-500" />
-                     <span className="text-emerald-400 font-black text-xl">+{transformQty * transformFactor} Détails</span>
-                  </div>
               </div>
 
               <button 
