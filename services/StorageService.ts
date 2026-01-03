@@ -291,8 +291,9 @@ class StorageService {
   getDefaultPermissions(role: string): View[] { return role === 'MANAGER' ? Object.values(View) : [View.DASHBOARD, View.SALES, View.STOCK, View.HISTORY]; }
   getExchangeRate(): number { return Number(localStorage.getItem('nexapme_rate')) || 2850; }
   updateExchangeRate(rate: number) { localStorage.setItem('nexapme_rate', rate.toString()); }
-  formatFC(amount: number): string { return new Intl.NumberFormat('fr-FR').format(amount) + ' FC'; }
-  formatUSD(amountFC: number): string { const rate = this.getExchangeRate(); return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountFC / rate); }
+  // Use any to allow flexible inputs and avoid type inference conflicts in some contexts
+  formatFC(amount: any): string { const val = typeof amount === 'number' ? amount : parseFloat(amount || 0); return new Intl.NumberFormat('fr-FR').format(val) + ' FC'; }
+  formatUSD(amountFC: any): string { const rate = this.getExchangeRate(); const val = typeof amountFC === 'number' ? amountFC : parseFloat(amountFC || 0); return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val / rate); }
   getCashFlow(): CashFlow[] { return JSON.parse(localStorage.getItem(`cache_cash_${this.currentPmeId}`) || '[]'); }
   getCashBalance(): number { const flows = this.getCashFlow(); return flows.reduce((acc, f) => f.type === 'IN' ? acc + f.amount : acc - f.amount, 0); }
   recordCashFlow(amount: number, type: 'IN' | 'OUT', category: string, description: string) { const flows = this.getCashFlow(); const newFlow = { id: this.generateUUID(), date: new Date().toISOString(), type, category, description, amount, author: this.getCurrentUser()?.name || 'system' }; localStorage.setItem(`cache_cash_${this.currentPmeId}`, JSON.stringify([newFlow, ...flows])); }

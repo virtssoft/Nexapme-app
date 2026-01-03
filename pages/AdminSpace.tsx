@@ -8,12 +8,16 @@ import {
   Loader2, Edit3, Save, 
   ShieldCheck, User, KeyRound,
   Users, Shield, Eye, EyeOff, Building2, UserCircle2,
-  Lock, UserPlus, ArrowLeft, AlertTriangle, Zap
+  Lock, UserPlus, ArrowLeft, AlertTriangle, Zap, LogOut
 } from 'lucide-react';
 
 type AdminView = 'LIST' | 'PME_FORM' | 'USER_LIST' | 'USER_FORM';
 
-const AdminSpace: React.FC = () => {
+interface AdminSpaceProps {
+  onLogout?: () => void;
+}
+
+const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
   const [currentView, setCurrentView] = useState<AdminView>('LIST');
   const [pmeList, setPmeList] = useState<PMEEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -287,10 +291,23 @@ const AdminSpace: React.FC = () => {
               <span>{serverOnline ? 'Cloud Nexa Actif' : 'Cloud Déconnecté'}</span>
             </div>
           </div>
-          <button onClick={goToAddPme} className="px-10 py-5 bg-slate-900 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-4 w-full lg:w-auto">
-            <Plus size={22} />
-            <span>Créer Licence PME</span>
-          </button>
+          
+          <div className="flex items-center gap-3 w-full lg:w-auto">
+            <button 
+              onClick={goToAddPme} 
+              className="flex-1 lg:flex-none px-8 py-5 bg-slate-900 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-3"
+            >
+              <Plus size={20} />
+              <span>Créer Licence</span>
+            </button>
+            <button 
+              onClick={onLogout} 
+              className="px-6 py-5 bg-rose-50 text-rose-600 border border-rose-100 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center gap-3 shadow-sm"
+            >
+              <LogOut size={20} />
+              <span className="hidden md:inline">Déconnexion</span>
+            </button>
+          </div>
         </header>
 
         <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center space-x-3">

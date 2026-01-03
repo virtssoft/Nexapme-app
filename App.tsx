@@ -94,7 +94,7 @@ const App: React.FC = () => {
       case View.CASH: return <CashJournal />;
       case View.INVENTORY: return <Inventory />;
       case View.SETTINGS: return <Settings onReset={() => storageService.clearLicense()} />;
-      case View.ADMIN_SPACE: return <AdminSpace />;
+      case View.ADMIN_SPACE: return <AdminSpace onLogout={() => setShowLogoutModal(true)} />;
       default: return <Dashboard />;
     }
   };
