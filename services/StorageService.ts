@@ -189,25 +189,34 @@ class StorageService {
     if (!this.currentPmeId) return [];
     try {
       const data = await ApiService.getSales(this.currentPmeId, from, to);
-      // Correction du mappage pour inclure toutes les propriétés requises par l'interface Sale
-      const sales: Sale[] = data.map((s: any) => ({ 
-        id: s.id, 
-        date: s.sale_date || s.date, 
-        total: parseFloat(s.total || 0), 
-        subtotal: parseFloat(s.subtotal || s.total || 0),
-        taxAmount: parseFloat(s.tax_amount || 0),
-        paymentType: (s.payment_type || 'CASH').toUpperCase() as any,
-        author: s.vendeur || 'Système',
-        authorId: s.user_id || s.author_id || 'system',
-        customerName: s.customer_name || 'Client Comptant',
-        items: (s.items ? (typeof s.items === 'string' ? JSON.parse(s.items) : s.items) : []).map((it: any) => ({
-          itemId: it.item_id || it.itemId,
-          designation: it.designation || 'Inconnu',
-          quantity: parseFloat(it.quantity || 0),
-          unitPrice: parseFloat(it.unit_price || it.unitPrice || 0),
-          total: parseFloat(it.total || 0)
-        }))
-      }));
+      const sales: Sale[] = data.map((s: any) => {
+        // Traitement sécurisé des items (souvent chaîne JSON côté PHP)
+        let parsedItems = [];
+        try {
+          parsedItems = s.items ? (typeof s.items === 'string' ? JSON.parse(s.items) : s.items) : [];
+        } catch (e) {
+          console.warn("Erreur parsing items vente", s.id);
+        }
+
+        return { 
+          id: s.id, 
+          date: s.sale_date || s.date, 
+          total: parseFloat(s.total || 0), 
+          subtotal: parseFloat(s.subtotal || s.total || 0),
+          taxAmount: parseFloat(s.tax_amount || 0),
+          paymentType: (s.payment_type || 'CASH').toUpperCase() as any,
+          author: s.vendeur || 'Système',
+          authorId: s.user_id || s.author_id || 'system',
+          customerName: s.customer_name || 'Client Comptant',
+          items: parsedItems.map((it: any) => ({
+            itemId: it.item_id || it.itemId,
+            designation: it.designation || 'Article Nexa',
+            quantity: parseFloat(it.quantity || 0),
+            unitPrice: parseFloat(it.unit_price || it.unitPrice || 0),
+            total: parseFloat(it.total || 0)
+          }))
+        };
+      });
       localStorage.setItem(`cache_sales_${this.currentPmeId}`, JSON.stringify(sales));
       return sales;
     } catch (e) { return this.getSales(); }

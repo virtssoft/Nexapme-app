@@ -274,7 +274,7 @@ const Inventory: React.FC = () => {
                         if (diff === 0) return null;
                         return (
                           <div key={item.id} className={`p-4 rounded-2xl border flex justify-between items-center ${diff < 0 ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100'}`}>
-                            <div><p className="font-black text-slate-800 text-sm uppercase">{item.designation}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{item.quantity} -> {real}</p></div>
+                            <div><p className="font-black text-slate-800 text-sm uppercase">{item.designation}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{item.quantity} {"→"} {real}</p></div>
                             <span className={`font-black text-lg ${diff < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{diff > 0 ? '+' : ''}{diff}</span>
                           </div>
                         );
