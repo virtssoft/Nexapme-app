@@ -75,7 +75,7 @@ const Dashboard: React.FC = () => {
             <div className="bg-slate-900 text-white px-6 py-4 rounded-2xl flex items-center space-x-4 shadow-xl flex-1 md:flex-none">
               <Wallet className="text-emerald-400" size={28} />
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Disponible en Caisse</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Caisse ({config?.currency || 'FC'})</p>
                 <div className="flex flex-col">
                   <p className="text-xl font-black leading-none">{storageService.formatFC(stats.cashBalance)}</p>
                   <p className="text-[10px] text-slate-500 font-bold mt-1">{storageService.formatUSD(stats.cashBalance)}</p>
@@ -89,10 +89,10 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-start justify-between">
           <div>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Recettes Totales du Jour</p>
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Recettes du Jour</p>
             <h3 className="text-xl font-black text-slate-900 mt-1">{storageService.formatFC(stats.dailySales)}</h3>
             <p className="text-[10px] text-emerald-500 font-bold uppercase mt-1 flex items-center space-x-1">
-              <TrendingUp size={12} /> <span>Activité Cloud</span>
+              <TrendingUp size={12} /> <span>Cloud Nexa Actif</span>
             </p>
           </div>
           <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl">
@@ -102,10 +102,10 @@ const Dashboard: React.FC = () => {
 
         <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-start justify-between">
           <div>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Alertes de Stock</p>
-            <h3 className="text-xl font-black text-slate-900 mt-1">{stats.stockAlerts} Articles</h3>
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Articles en Alerte</p>
+            <h3 className="text-xl font-black text-slate-900 mt-1">{stats.stockAlerts} Alertes</h3>
             <p className="text-[10px] text-rose-500 font-bold uppercase mt-1 flex items-center space-x-1">
-              <AlertCircle size={12} /> <span>Seuils critiques</span>
+              <AlertCircle size={12} /> <span>Seuils atteints</span>
             </p>
           </div>
           <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl">
@@ -118,7 +118,7 @@ const Dashboard: React.FC = () => {
             <p className="text-[10px] text-blue-100 font-black uppercase tracking-widest">Session Active</p>
             <h3 className="text-xl font-black mt-1 uppercase tracking-tighter">{user?.name}</h3>
             <p className="text-[10px] text-blue-200 font-bold uppercase mt-1 flex items-center space-x-1">
-              <Clock size={12} /> <span>En ligne</span>
+              <Clock size={12} /> <span>Connexion Sécurisée</span>
             </p>
           </div>
           <div className="p-4 bg-blue-500 rounded-2xl">
@@ -129,7 +129,7 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100">
-          <h3 className="text-lg font-black text-slate-800 mb-6 uppercase tracking-tighter">Flux de Ventes Hebdo</h3>
+          <h3 className="text-lg font-black text-slate-800 mb-6 uppercase tracking-tighter">Évolution de l'activité</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesData}>
@@ -153,9 +153,9 @@ const Dashboard: React.FC = () => {
            <div className="p-6 bg-emerald-50 text-emerald-600 rounded-full animate-bounce">
               <Sparkles size={40} />
            </div>
-           <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Analyse nexaPME</h3>
+           <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">IA nexaPME</h3>
            <p className="text-slate-500 text-sm max-w-xs font-medium">
-              Utilisez l'assistant intelligent en bas à droite pour obtenir des conseils sur la gestion de votre stock et vos marges bénéficiaires.
+              Vos statistiques sont synchronisées avec le Cloud. Demandez à l'assistant IA une analyse de vos marges ou de vos ruptures de stock.
            </p>
         </div>
       </div>

@@ -1,10 +1,10 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { storageService } from '../services/StorageService';
 import { StockItem, SaleItem, Sale } from '../types';
 import { 
   Search, ShoppingCart, Trash2, ShoppingBag, 
-  Printer, Plus, Layers
+  Printer, Plus, Layers, Loader2, RefreshCw
 } from 'lucide-react';
 import DocumentPrinter from '../components/DocumentPrinter';
 
@@ -12,7 +12,9 @@ type SaleMode = 'RETAIL' | 'WHOLESALE';
 
 const Sales: React.FC = () => {
   const config = storageService.getCompanyInfo();
-  const allStock = storageService.getStock().filter(i => i.quantity > 0);
+  const [allStock, setAllStock] = useState<StockItem[]>([]);
+  const [isLoadingStock, setIsLoadingStock] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   
   const [saleMode, setSaleMode] = useState<SaleMode>('RETAIL');
   const [cart, setCart] = useState<SaleItem[]>([]);
@@ -24,19 +26,41 @@ const Sales: React.FC = () => {
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [cashAmount, setCashAmount] = useState<number>(0);
 
+  const loadStock = async () => {
+    setIsLoadingStock(true);
+    try {
+      const stock = await storageService.fetchStock();
+      // On affiche tous les produits qui ont du stock, quel que soit leur type principal
+      setAllStock(stock.filter(i => i.quantity > 0));
+    } catch (e) {
+      console.error("Stock load failed");
+    } finally {
+      setIsLoadingStock(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStock();
+  }, []);
+
   const displayedStock = useMemo(() => {
     return allStock.filter(item => {
-      const matchesMode = saleMode === 'WHOLESALE' ? item.isWholesale : !item.isWholesale;
+      // On filtre par désignation
       const matchesSearch = item.designation.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesMode && matchesSearch;
+      
+      // OPTIONNEL : On peut choisir de filtrer par isWholesale ou tout afficher.
+      // Ici, on affiche tout pour permettre de vendre n'importe quel article au prix choisi.
+      return matchesSearch;
     });
-  }, [allStock, saleMode, searchTerm]);
+  }, [allStock, searchTerm]);
 
   const total = useMemo(() => cart.reduce((acc, item) => acc + item.total, 0), [cart]);
 
   const addToCart = (item: StockItem) => {
     const existing = cart.find(c => c.itemId === item.id);
-    const price = item.isWholesale ? item.wholesalePrice : item.retailPrice;
+    
+    // LOGIQUE DE PRIX : On prend le prix correspondant au mode de vente ACTIF
+    const price = saleMode === 'WHOLESALE' ? item.wholesalePrice : item.retailPrice;
 
     if (existing) {
       if (existing.quantity + 1 > item.quantity) {
@@ -55,7 +79,7 @@ const Sales: React.FC = () => {
         quantity: 1, 
         unitPrice: price, 
         total: price,
-        isWholesaleApplied: item.isWholesale
+        isWholesaleApplied: saleMode === 'WHOLESALE'
       }]);
     }
   };
@@ -74,8 +98,10 @@ const Sales: React.FC = () => {
     }));
   };
 
-  const finalizeSale = () => {
-    if (cart.length === 0) return;
+  const finalizeSale = async () => {
+    if (cart.length === 0 || isFinalizing) return;
+    
+    setIsFinalizing(true);
     const saleId = `FAC-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     const sale: Sale = {
       id: saleId,
@@ -87,53 +113,62 @@ const Sales: React.FC = () => {
       paymentType,
       customerName: customer.name,
       customerPhone: customer.phone,
-      // Fixed: getUser() -> getCurrentUser()?.name
       author: storageService.getCurrentUser()?.name || 'system',
       authorId: storageService.getCurrentUser()?.id || 'system',
       cashAmount: paymentType === 'MIXED' ? cashAmount : (paymentType === 'CASH' ? total : 0),
       creditAmount: paymentType === 'MIXED' ? (total - cashAmount) : (paymentType === 'CREDIT' ? total : 0)
     };
     
-    storageService.addSale(sale);
-    setLastSale(sale);
-    setIsPrinterOpen(true);
-    setCart([]);
-    setCustomer({ name: '', phone: '' });
-    setCashAmount(0);
+    try {
+      await storageService.addSale(sale);
+      setLastSale(sale);
+      setIsPrinterOpen(true);
+      setCart([]);
+      setCustomer({ name: '', phone: '' });
+      setCashAmount(0);
+      await loadStock();
+    } catch (e: any) {
+      alert("Erreur lors de la finalisation : " + e.message);
+    } finally {
+      setIsFinalizing(false);
+    }
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-20 lg:h-[calc(100vh-140px)]">
       <div className="lg:col-span-7 flex flex-col space-y-4">
-        <div className="bg-white p-1 rounded-3xl border border-slate-200 shadow-sm flex">
+        {/* Sélecteur de Mode - Définit le prix appliqué au clic */}
+        <div className="bg-white p-1 rounded-3xl border border-slate-200 shadow-sm flex shrink-0">
           <button 
             onClick={() => setSaleMode('RETAIL')}
             className={`flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${saleMode === 'RETAIL' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-indigo-600'}`}
           >
             <ShoppingCart size={16} />
-            <span>Vente Détail</span>
+            <span>Mode Détail (Standard)</span>
           </button>
           <button 
             onClick={() => setSaleMode('WHOLESALE')}
             className={`flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${saleMode === 'WHOLESALE' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-emerald-600'}`}
           >
             <Layers size={16} />
-            <span>Vente Gros</span>
+            <span>Mode Gros (Remise auto)</span>
           </button>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-3">
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-3 shrink-0">
           <Search size={20} className="text-slate-400" />
           <input 
             type="text" 
-            placeholder={saleMode === 'RETAIL' ? "Chercher détail..." : "Chercher gros..."} 
+            placeholder="Rechercher un produit dans le stock..." 
             className="flex-1 outline-none font-bold text-sm bg-transparent" 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
           />
+          {isLoadingStock && <Loader2 className="animate-spin text-slate-300" size={20} />}
+          <button onClick={loadStock} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400"><RefreshCw size={16} /></button>
         </div>
         
-        <div className="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-4 no-scrollbar">
+        <div className="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-4 no-scrollbar min-h-0">
           {displayedStock.map(item => (
             <button 
               key={item.id} 
@@ -142,20 +177,28 @@ const Sales: React.FC = () => {
             >
               <div>
                 <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${item.quantity <= item.alertThreshold ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
-                  Stock: {item.quantity}
+                  Dispo: {item.quantity} {item.unit}
                 </span>
                 <h4 className="font-bold text-slate-800 text-xs line-clamp-2 mt-2 leading-tight">{item.designation}</h4>
               </div>
               <div className="flex items-center justify-between mt-4">
-                <p className={`font-black text-sm ${saleMode === 'RETAIL' ? 'text-indigo-600' : 'text-emerald-600'}`}>
-                  {(item.isWholesale ? item.wholesalePrice : item.retailPrice).toLocaleString()} FC
-                </p>
+                <div>
+                   <p className={`font-black text-[11px] leading-none ${saleMode === 'RETAIL' ? 'text-indigo-600' : 'text-emerald-600'}`}>
+                    {(saleMode === 'WHOLESALE' ? item.wholesalePrice : item.retailPrice).toLocaleString()} FC
+                   </p>
+                   <p className="text-[7px] text-slate-400 font-bold uppercase mt-1">
+                     Prix {saleMode === 'RETAIL' ? 'Standard' : 'Gros'}
+                   </p>
+                </div>
                 <div className={`p-2 rounded-full ${saleMode === 'RETAIL' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'} group-hover:scale-110 transition-transform`}>
                   <Plus size={16} />
                 </div>
               </div>
             </button>
           ))}
+          {!isLoadingStock && displayedStock.length === 0 && (
+            <div className="col-span-full py-12 text-center text-slate-300 font-bold uppercase text-[10px]">Aucun article trouvé</div>
+          )}
         </div>
       </div>
 
@@ -176,7 +219,7 @@ const Sales: React.FC = () => {
               <div className="flex justify-between items-start mb-2">
                 <div className="flex-1 mr-2">
                   <p className="font-bold text-slate-800 text-[11px] leading-tight">{item.designation}</p>
-                  <p className="text-[9px] text-slate-400 font-bold">{item.unitPrice.toLocaleString()} FC</p>
+                  <p className="text-[9px] text-slate-400 font-bold">{item.unitPrice.toLocaleString()} FC {item.isWholesaleApplied && <span className="text-emerald-600 ml-1">(Gros)</span>}</p>
                 </div>
                 <button onClick={() => setCart(cart.filter(c => c.itemId !== item.itemId))} className="text-rose-300 hover:text-rose-500"><Trash2 size={16} /></button>
               </div>
@@ -205,9 +248,13 @@ const Sales: React.FC = () => {
              <button onClick={() => setPaymentType('MIXED')} className={`py-3 rounded-xl border-2 font-black text-[9px] uppercase tracking-widest ${paymentType === 'MIXED' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-400'}`}>Mixte</button>
           </div>
 
-          <button disabled={cart.length === 0} onClick={finalizeSale} className="w-full bg-slate-900 hover:bg-black text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center space-x-3 transition-all disabled:opacity-50 shadow-xl">
-            <Printer size={20} />
-            <span>Valider la Vente</span>
+          <button 
+            disabled={cart.length === 0 || isFinalizing} 
+            onClick={finalizeSale} 
+            className="w-full bg-slate-900 hover:bg-black text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center space-x-3 transition-all disabled:opacity-50 shadow-xl"
+          >
+            {isFinalizing ? <Loader2 className="animate-spin" size={20} /> : <Printer size={20} />}
+            <span>{isFinalizing ? 'Finalisation...' : 'Valider la Vente'}</span>
           </button>
         </div>
       </div>
