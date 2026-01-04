@@ -48,7 +48,7 @@ class StorageService {
   }
 
   async processSyncQueue() {
-    if (this.isSyncing || !this.currentPmeId) return;
+    if (this.isSyncing || !this.currentPmeId || !navigator.onLine) return;
     const queue = this.getSyncQueue();
     if (queue.length === 0) return;
 
@@ -62,11 +62,15 @@ class StorageService {
           case 'EXPENSE': await ApiService.recordExpense(item.data); break;
           case 'CREDIT_REPAY': await ApiService.repayCredit(item.data); break;
           case 'STOCK': 
-            if (item.data.id) await ApiService.updateProduct(item.data.id, this.currentPmeId, item.data);
-            else await ApiService.createProduct({ ...item.data, pme_id: this.currentPmeId });
+            if (item.data.id) {
+              await ApiService.updateProduct(item.data.id, this.currentPmeId, item.data);
+            } else {
+              await ApiService.createProduct(item.data);
+            }
             break;
         }
       } catch (e: any) {
+        console.error(`Sync failed for ${item.type}`, e);
         remainingQueue.push(item); 
       }
     }
@@ -77,6 +81,7 @@ class StorageService {
     if (remainingQueue.length < queue.length) {
       await Promise.all([this.fetchStock(), this.fetchSales(), this.fetchCashLedger()]);
     }
+    this.notifyDataChanged();
   }
 
   async validateLicenseRemote(key: string): Promise<LicenseInfo | null> {
@@ -214,12 +219,35 @@ class StorageService {
   }
 
   async saveStockItem(item: Partial<StockItem>) {
+    if (!this.currentPmeId) return;
+
+    // Mapping camelCase -> snake_case pour le Cloud
+    // Ajout explicite de sub_category et expiry_date pour éviter les Warnings PHP
+    const apiPayload = {
+      pme_id: this.currentPmeId,
+      id: item.id,
+      designation: item.designation,
+      category: item.category,
+      sub_category: item.subCategory || '',
+      quantity: item.quantity,
+      unit: item.unit || 'pcs',
+      purchase_price: item.purchasePrice,
+      retail_price: item.retailPrice,
+      wholesale_price: item.wholesalePrice,
+      alert_threshold: item.alertThreshold,
+      is_wholesale: item.isWholesale ? 1 : 0,
+      expiry_date: item.expiryDate || null
+    };
+
     try {
-      if (item.id) await ApiService.updateProduct(item.id, this.currentPmeId!, item);
-      else await ApiService.createProduct({ ...item, pme_id: this.currentPmeId });
+      if (item.id) {
+        await ApiService.updateProduct(item.id, this.currentPmeId, apiPayload);
+      } else {
+        await ApiService.createProduct(apiPayload);
+      }
       await this.fetchStock();
     } catch (e) {
-      this.addToSyncQueue('STOCK', item);
+      this.addToSyncQueue('STOCK', apiPayload);
     }
   }
 
@@ -228,7 +256,7 @@ class StorageService {
     try {
       await ApiService.deleteProduct(id, this.currentPmeId);
       await this.fetchStock();
-    } catch(e) { console.error("Delete failed"); }
+    } catch(e) { console.error("Delete failed", e); }
   }
 
   getSales(): Sale[] { return JSON.parse(localStorage.getItem(`cache_sales_${this.currentPmeId}`) || '[]'); }

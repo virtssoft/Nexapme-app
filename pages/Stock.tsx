@@ -16,6 +16,7 @@ const Stock: React.FC = () => {
 
   const [stock, setStock] = useState<StockItem[]>(storageService.getStock());
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Tous');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,6 +42,30 @@ const Stock: React.FC = () => {
       return matchesSearch && matchesCategory;
     });
   }, [stock, searchTerm, categoryFilter]);
+
+  const handleSave = async () => {
+    if (!formData.designation) {
+      alert("La désignation est obligatoire.");
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      await storageService.saveStockItem({
+        ...formData,
+        quantity: formData.quantity || 0,
+        retailPrice: formData.retailPrice || 0,
+        wholesalePrice: formData.wholesalePrice || 0,
+        purchasePrice: formData.purchasePrice || 0,
+        alertThreshold: formData.alertThreshold || 0,
+      });
+      setIsModalOpen(false);
+    } catch (e: any) {
+      alert("Erreur lors de l'enregistrement. Vérifiez votre connexion.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-24">
@@ -150,9 +175,26 @@ const Stock: React.FC = () => {
                 <div className="space-y-1"><label className="text-[10px] font-black text-blue-500 uppercase px-2">P.V Détail</label><input type="number" className="w-full p-4 bg-blue-50 border-2 border-blue-100 rounded-2xl font-bold" value={formData.retailPrice ?? ''} onChange={(e) => setFormData({...formData, retailPrice: Number(e.target.value)})} /></div>
                 <div className="space-y-1"><label className="text-[10px] font-black text-emerald-500 uppercase px-2">P.V Gros</label><input type="number" className="w-full p-4 bg-emerald-50 border-2 border-emerald-100 rounded-2xl font-bold" value={formData.wholesalePrice ?? ''} onChange={(e) => setFormData({...formData, wholesalePrice: Number(e.target.value)})} /></div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase px-2">Seuil Alerte</label>
+                  <input type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold" value={formData.alertThreshold ?? ''} onChange={(e) => setFormData({...formData, alertThreshold: Number(e.target.value)})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase px-2">Unité</label>
+                  <input type="text" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold" value={formData.unit || ''} onChange={(e) => setFormData({...formData, unit: e.target.value})} placeholder="pcs, kg, sacs..." />
+                </div>
+              </div>
             </div>
             <div className="p-8 bg-slate-50 border-t flex gap-4">
-              <button onClick={() => { storageService.saveStockItem(formData); setIsModalOpen(false); }} className="flex-1 py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-emerald-700">Enregistrer Produit</button>
+              <button 
+                disabled={isSaving}
+                onClick={handleSave} 
+                className="flex-1 py-5 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase shadow-xl hover:bg-emerald-700 flex items-center justify-center space-x-2"
+              >
+                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                <span>{formData.id ? 'Mettre à jour' : 'Enregistrer Produit'}</span>
+              </button>
             </div>
           </div>
         </div>

@@ -43,14 +43,19 @@ export class ApiService {
     
     const urlObj = new URL(url);
 
-    // CRITIQUE : Le backend Nexa exige souvent pme_id dans l'URL même pour POST/PUT
     if (data.pme_id) {
       urlObj.searchParams.set('pme_id', data.pme_id);
+    }
+    
+    if (data.id && (method === 'PUT' || method === 'DELETE' || (method === 'POST' && endpoint.includes('update')))) {
+      urlObj.searchParams.set('id', data.id);
     }
 
     if (method === 'GET' || method === 'DELETE') {
       Object.keys(data).forEach(key => {
-        if (key !== 'pme_id' && data[key] !== undefined) urlObj.searchParams.append(key, data[key]);
+        if (key !== 'pme_id' && key !== 'id' && data[key] !== undefined) {
+          urlObj.searchParams.append(key, data[key]);
+        }
       });
     }
 
@@ -76,10 +81,22 @@ export class ApiService {
       const text = await response.text();
       let json;
       try {
-        json = JSON.parse(text);
+        // Extraction robuste du JSON : on cherche le premier '{' ou '[' et le dernier '}' ou ']'
+        // Cela permet d'ignorer les <br /><b>Warning</b>... envoyés par PHP avant le JSON
+        const startIdx = Math.min(
+          text.indexOf('{') === -1 ? Infinity : text.indexOf('{'),
+          text.indexOf('[') === -1 ? Infinity : text.indexOf('[')
+        );
+        const endIdx = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+
+        if (startIdx !== Infinity && endIdx !== -1 && endIdx > startIdx) {
+          json = JSON.parse(text.substring(startIdx, endIdx + 1));
+        } else {
+          json = JSON.parse(text);
+        }
       } catch (e) {
-        console.error("Réponse brute non-JSON:", text);
-        throw new Error("ERREUR_FORMAT: Le serveur n'a pas renvoyé de JSON valide.");
+        console.error("Réponse brute corrompue ou non-JSON:", text);
+        throw new Error("ERREUR_FORMAT: Le serveur a renvoyé des données invalides.");
       }
 
       if (!response.ok) {
@@ -103,8 +120,12 @@ export class ApiService {
   static getStock(pme_id: string) { return this.request<any[]>('/stock/index.php', 'GET', { pme_id }); }
   static getInventory(pme_id: string, type?: 'wholesale' | 'retail') { return this.request<any[]>('/stock/inventory.php', 'GET', { pme_id, type }); }
   static createProduct(data: any) { return this.request<any>('/stock/index.php', 'POST', data); }
-  static updateProduct(id: string, pme_id: string, data: any) { return this.request<any>('/stock/index.php', 'PUT', { id, pme_id, ...data }); }
-  static deleteProduct(id: string, pme_id: string) { return this.request<any>('/stock/index.php', 'DELETE', { id, pme_id }); }
+  static updateProduct(id: string, pme_id: string, data: any) { 
+    return this.request<any>('/stock/index.php', 'PUT', { ...data, id, pme_id }); 
+  }
+  static deleteProduct(id: string, pme_id: string) { 
+    return this.request<any>('/stock/index.php', 'DELETE', { id, pme_id }); 
+  }
   static transformStock(pme_id: string, from_id: string, to_id: string, quantity: number, factor: number) { 
     return this.request<any>('/stock/transform.php', 'POST', { pme_id, from_id, to_id, quantity_to_transform: quantity, conversion_factor: factor }); 
   }
