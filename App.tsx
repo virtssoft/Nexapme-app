@@ -198,7 +198,9 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-sm shadow-2xl overflow-hidden">
              <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
-                <h3 className="text-xs font-black uppercase tracking-widest">Session</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest">
+                  {isAdminRoot ? 'Fermer Session ROOT' : 'Session nexaPME'}
+                </h3>
                 <button onClick={() => setShowLogoutModal(false)}><X size={20} /></button>
              </div>
              <div className="p-8 space-y-4">
@@ -210,7 +212,9 @@ const App: React.FC = () => {
                 )}
                 <button onClick={() => handleLogoutOption('EXIT')} className="w-full p-6 bg-slate-50 hover:bg-rose-50 border-2 border-slate-100 rounded-3xl transition-all flex items-center space-x-4">
                   <ExitIcon size={24} className="text-rose-600" />
-                  <span className="font-black text-slate-800 text-sm uppercase">Fermer Application</span>
+                  <span className="font-black text-slate-800 text-sm uppercase">
+                    {isAdminRoot ? 'Quitter la console' : 'Fermer Application'}
+                  </span>
                 </button>
              </div>
           </div>

@@ -4,12 +4,11 @@ const API_BASE_URL = 'https://nexaapi.comfortasbl.org/api';
 export class ApiService {
   /**
    * Vérifie la connectivité au Cloud Nexa.
-   * Tente de joindre index.php, ou à défaut, valide la présence du serveur.
    */
   static async checkStatus(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 secondes de délai
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       
       const response = await fetch(`${API_BASE_URL}/index.php`, { 
         method: 'GET',
@@ -19,12 +18,8 @@ export class ApiService {
       }).catch(() => null);
       
       clearTimeout(timeoutId);
-
-      // Si le serveur répond (même une 404), c'est qu'il est en ligne.
-      // Le problème est souvent une erreur réseau/CORS totale.
       if (response) return true;
 
-      // Deuxième tentative sur un autre endpoint connu en cas d'échec de l'index
       const secondTry = await fetch(`${API_BASE_URL}/users/login.php`, { method: 'OPTIONS', mode: 'cors' }).catch(() => null);
       return !!secondTry;
       
@@ -46,14 +41,24 @@ export class ApiService {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     let url = `${API_BASE_URL}${cleanEndpoint}`;
     
-    const options: RequestInit = { method, headers, mode: 'cors' };
-
     const urlObj = new URL(url);
+
+    // CRITIQUE : Le backend Nexa exige souvent pme_id dans l'URL même pour POST/PUT
+    if (data.pme_id) {
+      urlObj.searchParams.set('pme_id', data.pme_id);
+    }
+
     if (method === 'GET' || method === 'DELETE') {
       Object.keys(data).forEach(key => {
-        if (data[key] !== undefined) urlObj.searchParams.append(key, data[key]);
+        if (key !== 'pme_id' && data[key] !== undefined) urlObj.searchParams.append(key, data[key]);
       });
     }
+
+    const options: RequestInit = { 
+      method, 
+      headers, 
+      mode: 'cors' 
+    };
 
     if (method === 'POST' || method === 'PUT') {
       const payload = { ...data };
@@ -65,7 +70,7 @@ export class ApiService {
       const response = await fetch(urlObj.toString(), options);
       
       if (response.status === 404) {
-        throw new Error(`ERREUR_404: Le fichier ${cleanEndpoint} est introuvable sur votre serveur.`);
+        throw new Error(`ERREUR_404: Fichier ${cleanEndpoint} introuvable.`);
       }
 
       const text = await response.text();
@@ -73,7 +78,7 @@ export class ApiService {
       try {
         json = JSON.parse(text);
       } catch (e) {
-        console.error("Réponse brute du serveur (non-JSON):", text);
+        console.error("Réponse brute non-JSON:", text);
         throw new Error("ERREUR_FORMAT: Le serveur n'a pas renvoyé de JSON valide.");
       }
 
@@ -84,7 +89,6 @@ export class ApiService {
       return (json.status === 'ok' && json.data !== undefined) ? json.data : json;
     } catch (error: any) {
       if (error.message === 'Failed to fetch') {
-        console.error(`[NEXA_DEBUG] Échec sur ${url}. Vérifiez les headers Access-Control-Allow-Origin.`);
         throw new Error("ERREUR_CLOUD");
       }
       throw error;

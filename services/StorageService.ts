@@ -313,10 +313,13 @@ class StorageService {
   async fetchDashboardStats() { return await ApiService.getDashboardStats(this.currentPmeId!); }
   
   async fetchCompanyConfigRemote() { 
-    const data: any = await ApiService.getDashboardConfig(this.currentPmeId!);
+    const pmeId = this.currentPmeId || localStorage.getItem('nexapme_active_id');
+    if (!pmeId) return null;
+
+    const data: any = await ApiService.getDashboardConfig(pmeId);
     if (data) {
       const config: CompanyConfig = {
-        idUnique: data.pme_id || this.currentPmeId,
+        idUnique: data.pme_id || pmeId,
         name: data.name || data.pme_name || '',
         owner: data.owner_name || '',
         currency: data.currency || 'FC',
@@ -335,8 +338,11 @@ class StorageService {
   }
   
   async saveCompanyConfigRemote(c: CompanyConfig) { 
+    const pmeId = this.currentPmeId || localStorage.getItem('nexapme_active_id');
+    if (!pmeId) throw new Error("ID de la PME manquant.");
+
     const payload = {
-      pme_id: this.currentPmeId,
+      pme_id: pmeId,
       currency: c.currency,
       exchange_rate: c.exchange_rate,
       tax_id: c.tax_id,
@@ -346,8 +352,8 @@ class StorageService {
       domain: c.domain,
       name: c.name
     };
-    await ApiService.saveDashboardConfig(this.currentPmeId!, payload); 
-    this.saveCompanyInfo(c);
+    await ApiService.saveDashboardConfig(pmeId, payload); 
+    this.saveCompanyInfo({ ...c, idUnique: pmeId });
     this.notifyDataChanged(); 
   }
   
@@ -362,7 +368,6 @@ class StorageService {
     await this.fetchStock();
   }
 
-  // Added missing Operations methods
   getOperations(): Operation[] {
     return JSON.parse(localStorage.getItem(`nexapme_ops_${this.currentPmeId}`) || '[]');
   }
@@ -372,7 +377,6 @@ class StorageService {
     this.notifyDataChanged();
   }
 
-  // Added missing Appointments methods
   getAppointments(): Appointment[] {
     return JSON.parse(localStorage.getItem(`nexapme_apps_${this.currentPmeId}`) || '[]');
   }
@@ -382,7 +386,6 @@ class StorageService {
     this.notifyDataChanged();
   }
 
-  // Added missing Quotes methods
   getQuotes(): Quote[] {
     return JSON.parse(localStorage.getItem(`nexapme_quotes_${this.currentPmeId}`) || '[]');
   }

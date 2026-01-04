@@ -268,6 +268,16 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const LogoutButton = () => (
+    <button 
+      onClick={onLogout} 
+      className="px-6 py-4 bg-rose-50 text-rose-600 border border-rose-100 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center gap-3 shadow-sm shrink-0"
+    >
+      <LogOut size={16} />
+      <span className="hidden sm:inline">Déconnexion</span>
+    </button>
+  );
+
   // --- Views ---
 
   if (currentView === 'LIST') {
@@ -300,13 +310,7 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
               <Plus size={20} />
               <span>Créer Licence</span>
             </button>
-            <button 
-              onClick={onLogout} 
-              className="px-6 py-5 bg-rose-50 text-rose-600 border border-rose-100 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center gap-3 shadow-sm"
-            >
-              <LogOut size={20} />
-              <span className="hidden md:inline">Déconnexion</span>
-            </button>
+            <LogoutButton />
           </div>
         </header>
 
@@ -361,9 +365,12 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
   if (currentView === 'PME_FORM') {
     return (
       <div className="max-w-4xl mx-auto space-y-8 view-transition">
-        <button onClick={() => setCurrentView('LIST')} className="flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-all">
-          <ArrowLeft size={16} /> <span>Retour au tableau de bord</span>
-        </button>
+        <div className="flex justify-between items-center px-2">
+          <button onClick={() => setCurrentView('LIST')} className="flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-all">
+            <ArrowLeft size={16} /> <span>Retour au tableau de bord</span>
+          </button>
+          <LogoutButton />
+        </div>
         <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden">
           <div className="p-10 bg-slate-900 text-white flex items-center space-x-6">
             <div className="p-5 bg-emerald-500 rounded-3xl text-slate-900 shadow-xl"><Building2 size={32} /></div>
@@ -437,10 +444,13 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
               </div>
             </div>
           </div>
-          <button onClick={goToAddUser} className="px-10 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 transition-all flex items-center justify-center gap-4 w-full md:w-auto">
-            <UserPlus size={22} />
-            <span>Nouveau Compte Personnel</span>
-          </button>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <button onClick={goToAddUser} className="px-8 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-700 transition-all flex items-center justify-center gap-4 flex-1">
+              <UserPlus size={22} />
+              <span>Nouveau Compte</span>
+            </button>
+            <LogoutButton />
+          </div>
         </header>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pmeUsers.map((u, i) => (
@@ -472,7 +482,10 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
   if (currentView === 'USER_FORM' && selectedPmeForUsers) {
     return (
       <div className="max-w-4xl mx-auto space-y-8 view-transition">
-        <button onClick={() => setCurrentView('USER_LIST')} className="flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-all"><ArrowLeft size={16} /> <span>Retour à la liste</span></button>
+        <div className="flex justify-between items-center px-2">
+          <button onClick={() => setCurrentView('USER_LIST')} className="flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-all"><ArrowLeft size={16} /> <span>Retour à la liste</span></button>
+          <LogoutButton />
+        </div>
         <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden">
           <div className="p-10 bg-slate-900 text-white flex items-center space-x-6">
             <div className="p-5 bg-blue-600 rounded-3xl text-white shadow-xl"><UserPlus size={32} /></div>
