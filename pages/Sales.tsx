@@ -3,8 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { storageService } from '../services/StorageService';
 import { StockItem, SaleItem, Sale } from '../types';
 import { 
-  Search, ShoppingCart, Trash2, ShoppingBag, 
-  Printer, Plus, Layers, Loader2, RefreshCw, Banknote, CreditCard
+  Search, Trash2, Printer, Plus, Loader2, RefreshCw
 } from 'lucide-react';
 import DocumentPrinter from '../components/DocumentPrinter';
 

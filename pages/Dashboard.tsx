@@ -5,8 +5,8 @@ import {
   AreaChart, Area, XAxis, YAxis
 } from 'recharts';
 import { 
-  ShoppingBag, Users, Package, Wallet, RefreshCw, DollarSign, 
-  TrendingUp, AlertCircle, Clock, Sparkles, Loader2, CheckCircle, User
+  ShoppingBag, Package, Wallet, RefreshCw, DollarSign, 
+  TrendingUp, Loader2, User
 } from 'lucide-react';
 import { storageService } from '../services/StorageService';
 import Branding from '../components/Branding';
@@ -18,7 +18,6 @@ const Dashboard: React.FC = () => {
   
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [rate, setRate] = useState(storageService.getExchangeRate());
-  const [isEditingRate, setIsEditingRate] = useState(false);
 
   const [localData, setLocalData] = useState({
     stock: storageService.getStock(),
@@ -61,7 +60,7 @@ const Dashboard: React.FC = () => {
     // Filtrage strict : Le vendeur ne voit que SES ventes
     const filteredSales = isManager 
       ? localData.sales 
-      : localData.sales.filter(s => s.authorId === user?.id);
+      : localData.sales.filter(s => String(s.authorId) === String(user?.id));
 
     const todaySales = filteredSales
       .filter(s => s.date.startsWith(today))
@@ -71,9 +70,7 @@ const Dashboard: React.FC = () => {
       .filter(item => item.quantity <= item.alertThreshold)
       .length;
       
-    const cashBalance = localData.cashFlow.length > 0 && (localData.cashFlow[0] as any).balance_after !== undefined
-      ? (localData.cashFlow[0] as any).balance_after
-      : localData.cashFlow.reduce((acc, f) => f.type === 'IN' ? acc + f.amount : acc - f.amount, 0);
+    const cashBalance = storageService.getCashBalance();
 
     const perWorkerSales: Record<string, number> = {};
     if (isManager) {
@@ -102,8 +99,8 @@ const Dashboard: React.FC = () => {
 
           <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 flex-1 md:flex-none">
             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><DollarSign size={18} /></div>
-            <div className={isManager ? "cursor-pointer group" : ""} onClick={() => isManager && setIsEditingRate(true)}>
-              <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">Taux Actuel</p>
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">Taux Fixé</p>
               <span className="text-sm font-black text-slate-700">1$ = {(rate || 2850).toLocaleString()} FC</span>
             </div>
           </div>
@@ -111,8 +108,8 @@ const Dashboard: React.FC = () => {
           {isManager && (
             <div className="bg-slate-900 text-white px-6 py-4 rounded-2xl flex items-center space-x-4 shadow-xl flex-1 md:flex-none">
               <Wallet className="text-emerald-400" size={28} />
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Solde Caisse Global</p>
+              <div className="text-left">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Caisse Globale</p>
                 <p className="text-xl font-black leading-none">{storageService.formatFC(stats.cashBalance)}</p>
                 <p className="text-[10px] font-bold text-emerald-400 mt-1 uppercase">≈ {storageService.formatUSD(stats.cashBalance)}</p>
               </div>
@@ -152,7 +149,7 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100">
-          <h3 className="text-lg font-black text-slate-800 mb-6 uppercase tracking-tighter text-left">Évolution de l'activité (7j)</h3>
+          <h3 className="text-lg font-black text-slate-800 mb-6 uppercase tracking-tighter text-left">Activité hebdomadaire</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesData}>
@@ -161,7 +158,7 @@ const Dashboard: React.FC = () => {
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
                 <Tooltip 
                   contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  formatter={(value) => [`${(Number(value) || 0).toLocaleString()} FC`, 'Total']} 
+                  formatter={(value) => [`${(Number(value) || 0).toLocaleString()} FC`, 'Chiffre d\'affaires']} 
                 />
                 <Area type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={3} fillOpacity={0.1} fill="#10b981" />
               </AreaChart>
@@ -171,7 +168,7 @@ const Dashboard: React.FC = () => {
 
         {isManager && (
           <div className="lg:col-span-4 bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
-            <h3 className="text-sm font-black text-slate-800 mb-6 uppercase tracking-widest text-left">Performances Équipe</h3>
+            <h3 className="text-sm font-black text-slate-800 mb-6 uppercase tracking-widest text-left">Classement Vendeurs</h3>
             <div className="space-y-4">
               {Object.entries(stats.perWorkerSales).map(([name, amount]) => (
                 <div key={name} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -186,7 +183,7 @@ const Dashboard: React.FC = () => {
                 </div>
               ))}
               {Object.keys(stats.perWorkerSales).length === 0 && (
-                <p className="text-center py-10 text-[10px] text-slate-300 font-bold uppercase tracking-widest">En attente de ventes...</p>
+                <p className="text-center py-10 text-[10px] text-slate-300 font-bold uppercase tracking-widest">Aucune vente ce jour</p>
               )}
             </div>
           </div>

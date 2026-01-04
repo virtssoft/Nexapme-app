@@ -32,7 +32,7 @@ export interface PMEEntry {
   created_at: string;
 }
 
-export type ModuleDomain = 'FOOD_RETAIL' | 'TECH_SERVICES' | 'REAL_ESTATE' | 'MEDIA' | 'LOGISTICS' | 'FITNESS' | 'BEAUTY' | 'COMMERCE';
+export type ModuleDomain = 'FOOD_RETAIL' | 'TECH_SERVICES' | 'REAL_ESTATE' | 'MEDIA' | 'LOGISTICS' | 'FITNESS' | 'BEAUTY' | 'COMMERCE' | 'Retail' | 'Gros' | 'Alimentation';
 
 export interface SubCategory {
   id: string;
@@ -41,29 +41,17 @@ export interface SubCategory {
 }
 
 export interface CompanyConfig {
-  idUnique: string;
+  idUnique: string; // pme_id
   name: string;
   owner: string;
-  currency: 'FC' | 'USD';
-  setupDate: string;
-  taxId?: string;
-  /**
-   * Added tax_id to support existing usage in StorageService and Settings components
-   */
-  tax_id?: string;
-  rccm?: string;
-  address?: string;
+  currency: string; // "USD", "FC"
+  exchange_rate: number;
+  tax_id?: string; // RCCM
   phone?: string;
+  address?: string;
   email?: string;
-  taxPercentage?: number;
-  receiptFooter?: string;
   domain?: ModuleDomain;
-  subDomain?: string;
-  bankDetails?: string;
-  /**
-   * Added exchange_rate to support existing usage in StorageService and Settings components
-   */
-  exchange_rate?: number;
+  setupDate?: string;
 }
 
 export interface StockItem {
@@ -132,6 +120,7 @@ export interface CashFlow {
   description: string;
   amount: number;
   author: string;
+  balance_after?: number;
 }
 
 export interface InventoryReport {
@@ -150,6 +139,7 @@ export interface InventoryReport {
   author: string;
 }
 
+// Added missing Operation type
 export interface Operation {
   id: string;
   clientName: string;
@@ -163,15 +153,17 @@ export interface Operation {
   metadata?: any;
 }
 
+// Added missing Appointment type
 export interface Appointment {
   id: string;
   clientName: string;
   serviceName: string;
   dateTime: string;
   duration: number;
-  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
+  status: 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
 }
 
+// Added missing Quote types
 export type QuoteStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REFUSED';
 
 export interface QuoteItem {
