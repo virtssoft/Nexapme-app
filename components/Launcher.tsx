@@ -43,8 +43,12 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }: LauncherProps) => {
         setError('Licence invalide ou désactivée.');
       }
     } catch (e: any) {
-      setError(e.message || 'Erreur de liaison avec le serveur nexaPME.');
-      if (e.message.includes("CORS")) setShowCorsInfo(true);
+      if (e.message.includes("ERREUR_CLOUD") || e.message.includes("Failed to fetch")) {
+        setError("Liaison Cloud Interrompue. Votre serveur ne répond pas ou bloque l'accès (CORS).");
+        setShowCorsInfo(true);
+      } else {
+        setError(e.message || 'Erreur de liaison avec le serveur nexaPME.');
+      }
       checkStatus();
     } finally {
       setIsValidating(false);
@@ -90,23 +94,6 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }: LauncherProps) => {
 
         <div className="bg-white/5 backdrop-blur-3xl p-8 rounded-[3rem] border border-white/10 shadow-2xl space-y-8">
           <div className="space-y-4">
-            <button 
-              onClick={() => handleValidate('TRIAL_MODE')}
-              disabled={isValidating}
-              className="group relative overflow-hidden w-full py-6 bg-emerald-500/5 hover:bg-emerald-500/10 border-2 border-emerald-500/20 hover:border-emerald-500/50 rounded-2xl transition-all duration-300 flex flex-col items-center"
-            >
-              <div className="flex items-center space-x-2 text-emerald-400 font-black text-[10px] uppercase tracking-widest mb-1">
-                <Clock size={14} />
-                <span>Nouveau Compte</span>
-              </div>
-              <span className="text-white font-black text-xs uppercase tracking-widest">Démarrer Essai 7 Jours</span>
-            </button>
-
-            <div className="relative py-2">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
-              <div className="relative flex justify-center"><span className="px-4 bg-slate-950 text-[9px] font-black text-slate-600 uppercase tracking-[0.3em]">ou Accès Client</span></div>
-            </div>
-
             <div className="space-y-4">
               <div className="relative group">
                 <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-emerald-500 transition-colors" size={20} />
@@ -128,26 +115,10 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }: LauncherProps) => {
                   </div>
                   
                   {showCorsInfo && (
-                    <button 
-                      onClick={() => setShowCorsInfo(!showCorsInfo)}
-                      className="w-full py-2 bg-rose-500/20 rounded-xl text-[8px] font-black uppercase text-rose-400 border border-rose-500/30 flex items-center justify-center space-x-2"
-                    >
-                      <Info size={12} />
-                      <span>Pourquoi Postman fonctionne mais pas l'App ?</span>
-                    </button>
+                    <div className="p-3 bg-blue-500/10 rounded-xl text-[8px] font-bold text-blue-300 uppercase leading-relaxed">
+                      Conseil : Vérifiez que le fichier <code className="text-white">api/index.php</code> existe et contient les headers CORS.
+                    </div>
                   )}
-                </div>
-              )}
-
-              {showCorsInfo && (
-                <div className="p-5 bg-blue-500/10 border border-blue-500/30 rounded-2xl space-y-3 animate-in slide-in-from-top-2">
-                  <p className="text-[9px] font-bold text-blue-300 leading-relaxed uppercase">
-                    C'est une protection du navigateur. Postman est un outil libre, mais le navigateur exige que votre serveur PHP autorise explicitement l'App Nexa via des headers CORS.
-                  </p>
-                  <div className="p-3 bg-black/40 rounded-xl font-mono text-[8px] text-emerald-400 overflow-x-auto">
-                    header("Access-Control-Allow-Origin: *");<br/>
-                    header("Access-Control-Allow-Headers: *");
-                  </div>
                 </div>
               )}
               
@@ -172,7 +143,7 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }: LauncherProps) => {
               className="w-full text-slate-500 hover:text-white font-black text-[9px] uppercase tracking-widest flex items-center justify-center space-x-2 transition-colors py-2"
             >
               <HelpCircle size={14} />
-              <span>Support Technique nexaPME</span>
+              <span>Besoin d'aide ?</span>
             </button>
           </div>
         </div>
@@ -180,7 +151,7 @@ const Launcher: React.FC<LauncherProps> = ({ onValidated }: LauncherProps) => {
         {showHelp && (
           <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-[2rem] animate-in slide-in-from-top-4 backdrop-blur-md">
             <div className="flex flex-col items-center text-center space-y-2">
-              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Ligne de Support Direct</p>
+              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Support Technique nexaPME</p>
               <div className="flex items-center space-x-4">
                 <div className="p-3 bg-emerald-500 text-slate-900 rounded-2xl">
                    <Phone size={20} />

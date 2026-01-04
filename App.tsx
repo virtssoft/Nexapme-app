@@ -17,11 +17,12 @@ import Launcher from './components/Launcher';
 import Branding from './components/Branding';
 import { storageService } from './services/StorageService';
 import { ApiService } from './services/ApiService';
-import { Menu, LogOut, Loader2, Sparkles, CheckCircle, AlertCircle, User, LogOut as ExitIcon, X } from 'lucide-react';
+import { Menu, LogOut, Loader2, Sparkles, CheckCircle, AlertCircle, User, LogOut as ExitIcon, X, Globe, CloudOff, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+  const [pendingSync, setPendingSync] = useState(0);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   
@@ -35,29 +36,37 @@ const App: React.FC = () => {
   useEffect(() => {
     const restoreSession = async () => {
       ApiService.checkStatus().then(setApiOnline);
+      setPendingSync(storageService.getPendingCount());
 
       const storedLicense = storageService.getLicense();
       if (storedLicense) {
         setActiveLicense(storedLicense);
-        
-        // Si c'est un administrateur ROOT, on saute l'écran de Login
         if (storedLicense.type === 'ADMIN') {
           setCurrentView(View.ADMIN_SPACE);
-          // On crée une session utilisateur factice pour le gérant root
-          const adminUser: UserProfile = { id: 'admin-root', name: 'Administrateur Nexa', role: 'ADMIN', pin: '' };
-          setCurrentUser(adminUser);
+          setCurrentUser({ id: 'admin-root', name: 'Administrateur Nexa', role: 'ADMIN', pin: '' });
         } else {
           storageService.setActiveCompany(storedLicense.idUnique);
           setCompanyConfig(storageService.getCompanyInfo());
-          
           const user = storageService.getCurrentUser();
           if (user) setCurrentUser(user);
         }
       }
-      
       setTimeout(() => setIsInitializing(false), 1500);
     };
     restoreSession();
+
+    const syncInterval = setInterval(() => {
+      ApiService.checkStatus().then(setApiOnline);
+      setPendingSync(storageService.getPendingCount());
+    }, 10000);
+
+    const handleUpdate = () => setPendingSync(storageService.getPendingCount());
+    window.addEventListener('nexa_data_updated', handleUpdate);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('nexa_data_updated', handleUpdate);
+    };
   }, []);
 
   const triggerSessionLoader = (callback: () => void) => {
@@ -110,38 +119,30 @@ const App: React.FC = () => {
           </h1>
           <div className={`mt-8 px-6 py-2 rounded-full border text-[10px] font-black uppercase tracking-widest flex items-center space-x-3 transition-colors ${apiOnline === null ? 'bg-slate-500/10 border-slate-500/30 text-slate-400' : apiOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
             {apiOnline === null ? <Loader2 size={14} className="animate-spin" /> : apiOnline ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-            <span>{apiOnline === null ? 'Liaison Cloud...' : apiOnline ? 'Serveur Cloud OK' : 'Cloud Inaccessible'}</span>
+            <span>{apiOnline === null ? 'Liaison Cloud...' : apiOnline ? 'Cloud Nexa OK' : 'Cloud Inaccessible'}</span>
           </div>
         </div>
       </div>
     );
   }
 
-  // ÉTAPE 1 : ACTIVATION LICENCE
-  if (!activeLicense) {
-    return <Launcher onValidated={(license) => triggerSessionLoader(() => {
-      setActiveLicense(license);
-      if (license.type === 'ADMIN') {
-        setCurrentView(View.ADMIN_SPACE);
-        const adminUser: UserProfile = { id: 'admin-root', name: 'Administrateur Nexa', role: 'ADMIN', pin: '' };
-        setCurrentUser(adminUser);
-      } else {
-        setCompanyConfig(storageService.getCompanyInfo());
-      }
-    })} />;
-  }
+  if (!activeLicense) return <Launcher onValidated={(license) => triggerSessionLoader(() => {
+    setActiveLicense(license);
+    if (license.type === 'ADMIN') {
+      setCurrentView(View.ADMIN_SPACE);
+      setCurrentUser({ id: 'admin-root', name: 'Administrateur Nexa', role: 'ADMIN', pin: '' });
+    } else {
+      setCompanyConfig(storageService.getCompanyInfo());
+    }
+  })} />;
 
-  // ÉTAPE 2 : LOGIN (Seulement pour les PME normales)
-  if (!currentUser) {
-    return <Login 
-      onLogin={(user) => triggerSessionLoader(() => setCurrentUser(user))} 
-      onExit={() => handleLogoutOption('EXIT')}
-      companyName={companyConfig?.name || 'nexaPME'} 
-      category={companyConfig?.owner ? `Propriétaire: ${companyConfig.owner}` : "Espace Client"} 
-    />;
-  }
+  if (!currentUser) return <Login 
+    onLogin={(user) => triggerSessionLoader(() => setCurrentUser(user))} 
+    onExit={() => handleLogoutOption('EXIT')}
+    companyName={companyConfig?.name || 'nexaPME'} 
+    category={companyConfig?.owner ? `Propriétaire: ${companyConfig.owner}` : "Espace Client"} 
+  />;
 
-  // ÉTAPE 3 : MAIN APP (ROOT ou PME)
   const isAdminRoot = activeLicense.type === 'ADMIN';
 
   return (
@@ -159,52 +160,57 @@ const App: React.FC = () => {
         />
       )}
       
-      <header className="lg:hidden bg-slate-900 text-white p-4 flex items-center justify-between sticky top-0 z-40">
-        {!isAdminRoot ? (
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2"><Menu size={24} /></button>
-        ) : <div className="w-10"></div>}
-        <Branding companyName={isAdminRoot ? "ROOT CONSOLE" : (companyConfig?.name || 'nexaPME')} category={isAdminRoot ? "Cloud Master" : "Cloud Control"} size="sm" />
-        <button onClick={() => setShowLogoutModal(true)} className="p-2 bg-rose-500 rounded-lg"><LogOut size={18} /></button>
-      </header>
+      <div className="flex-1 flex flex-col min-h-screen">
+        {/* Sync & Cloud Status Bar */}
+        <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between no-print sticky top-0 z-40">
+           <div className="flex items-center space-x-4">
+              {!isAdminRoot && (
+                <button 
+                  onClick={() => setIsSidebarOpen(true)} 
+                  className="lg:hidden p-2 text-white hover:bg-slate-800 rounded-xl transition-all"
+                >
+                  <Menu size={24} />
+                </button>
+              )}
+              <Branding companyName={isAdminRoot ? "ROOT CONSOLE" : (companyConfig?.name || 'nexaPME')} category={isAdminRoot ? "Cloud Master" : "Cloud Control"} size="sm" />
+           </div>
+           <div className="flex items-center space-x-3">
+              {pendingSync > 0 && (
+                <div className="flex items-center space-x-2 text-amber-400 bg-amber-400/10 px-3 py-1 rounded-xl border border-amber-400/20">
+                  <RefreshCw size={12} className="animate-spin" />
+                  <span className="text-[9px] font-black uppercase tracking-widest">{pendingSync} Sync</span>
+                </div>
+              )}
+              <div className={`flex items-center space-x-2 px-3 py-1 rounded-xl border ${apiOnline ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'}`}>
+                <Globe size={12} />
+                <span className="text-[9px] font-black uppercase tracking-widest">{apiOnline ? 'Online' : 'Offline'}</span>
+              </div>
+              <button onClick={() => setShowLogoutModal(true)} className="p-2 bg-rose-500 text-white rounded-lg shadow-lg hover:bg-rose-600 transition-all ml-2"><LogOut size={16} /></button>
+           </div>
+        </div>
 
-      <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
-        <div className="max-w-7xl mx-auto">{renderCurrentView()}</div>
-      </main>
+        <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
+          <div className="max-w-7xl mx-auto">{renderCurrentView()}</div>
+        </main>
+      </div>
 
       {showLogoutModal && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] w-full max-sm shadow-2xl overflow-hidden animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-sm shadow-2xl overflow-hidden">
              <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
-                <h3 className="text-xs font-black uppercase tracking-widest">Déconnexion</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest">Session</h3>
                 <button onClick={() => setShowLogoutModal(false)}><X size={20} /></button>
              </div>
              <div className="p-8 space-y-4">
                 {!isAdminRoot && (
-                  <button 
-                    onClick={() => handleLogoutOption('SWITCH')}
-                    className="w-full p-6 bg-slate-50 hover:bg-emerald-50 border-2 border-slate-100 hover:border-emerald-500 rounded-3xl transition-all flex items-center space-x-4 group"
-                  >
-                    <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                      <User size={24} />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-black text-slate-800 text-sm uppercase">Changer d'utilisateur</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Retour au choix du personnel</p>
-                    </div>
+                  <button onClick={() => handleLogoutOption('SWITCH')} className="w-full p-6 bg-slate-50 hover:bg-emerald-50 border-2 border-slate-100 rounded-3xl transition-all flex items-center space-x-4">
+                    <User size={24} className="text-emerald-600" />
+                    <span className="font-black text-slate-800 text-sm uppercase">Changer Vendeur</span>
                   </button>
                 )}
-
-                <button 
-                  onClick={() => handleLogoutOption('EXIT')}
-                  className="w-full p-6 bg-slate-50 hover:bg-rose-50 border-2 border-slate-100 hover:border-rose-500 rounded-3xl transition-all flex items-center space-x-4 group"
-                >
-                  <div className="p-3 bg-rose-100 text-rose-600 rounded-2xl group-hover:bg-rose-600 group-hover:text-white transition-all">
-                    <ExitIcon size={24} />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-black text-slate-800 text-sm uppercase">{isAdminRoot ? 'Fermer la console ROOT' : 'Quitter l\'entreprise'}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Retour à l'accueil licence</p>
-                  </div>
+                <button onClick={() => handleLogoutOption('EXIT')} className="w-full p-6 bg-slate-50 hover:bg-rose-50 border-2 border-slate-100 rounded-3xl transition-all flex items-center space-x-4">
+                  <ExitIcon size={24} className="text-rose-600" />
+                  <span className="font-black text-slate-800 text-sm uppercase">Fermer Application</span>
                 </button>
              </div>
           </div>
