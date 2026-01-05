@@ -46,7 +46,16 @@ const App: React.FC = () => {
           setCurrentUser({ id: 'admin-root', name: 'Administrateur Nexa', role: 'ADMIN', pin: '' });
         } else {
           storageService.setActiveCompany(storedLicense.idUnique);
-          setCompanyConfig(storageService.getCompanyInfo());
+          
+          // Charger la configuration locale
+          const localConfig = storageService.getCompanyInfo();
+          setCompanyConfig(localConfig);
+
+          // Rafraîchir immédiatement depuis le Cloud pour le taux de change
+          storageService.fetchCompanyConfigRemote().then(remoteConfig => {
+            if (remoteConfig) setCompanyConfig(remoteConfig);
+          });
+
           const user = storageService.getCurrentUser();
           if (user) setCurrentUser(user);
         }
@@ -60,7 +69,12 @@ const App: React.FC = () => {
       setPendingSync(storageService.getPendingCount());
     }, 10000);
 
-    const handleUpdate = () => setPendingSync(storageService.getPendingCount());
+    const handleUpdate = () => {
+      setPendingSync(storageService.getPendingCount());
+      // S'assurer que la config locale est à jour si elle a changé
+      const updatedConfig = storageService.getCompanyInfo();
+      if (updatedConfig) setCompanyConfig(updatedConfig);
+    };
     window.addEventListener('nexa_data_updated', handleUpdate);
 
     return () => {

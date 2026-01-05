@@ -31,7 +31,8 @@ const Dashboard: React.FC = () => {
       await Promise.all([
         storageService.fetchStock(),
         storageService.fetchSales(),
-        storageService.fetchCashLedger()
+        storageService.fetchCashLedger(),
+        storageService.fetchCompanyConfigRemote() // Assure que le taux de change est à jour
       ]);
     } catch (e) {
       console.error("Erreur synchro Dashboard", e);
