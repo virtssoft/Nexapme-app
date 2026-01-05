@@ -43,6 +43,11 @@ export class ApiService {
     
     const urlObj = new URL(url);
 
+    // CRITICAL: Toujours envoyer la clé de licence active dans l'URL pour l'autorisation
+    if (licenseKey) {
+      urlObj.searchParams.set('license_key', licenseKey);
+    }
+
     if (data.pme_id) {
       urlObj.searchParams.set('pme_id', data.pme_id);
     }
@@ -67,6 +72,7 @@ export class ApiService {
 
     if (method === 'POST' || method === 'PUT') {
       const payload = { ...data };
+      // Ne pas écraser si une license_key est déjà présente dans les données (ex: création PME)
       if (licenseKey && !payload.license_key) payload.license_key = licenseKey;
       options.body = JSON.stringify(payload);
     }
@@ -81,8 +87,6 @@ export class ApiService {
       const text = await response.text();
       let json;
       try {
-        // Extraction robuste du JSON : on cherche le premier '{' ou '[' et le dernier '}' ou ']'
-        // Cela permet d'ignorer les <br /><b>Warning</b>... envoyés par PHP avant le JSON
         const startIdx = Math.min(
           text.indexOf('{') === -1 ? Infinity : text.indexOf('{'),
           text.indexOf('[') === -1 ? Infinity : text.indexOf('[')
@@ -106,7 +110,7 @@ export class ApiService {
       return (json.status === 'ok' && json.data !== undefined) ? json.data : json;
     } catch (error: any) {
       if (error.message === 'Failed to fetch') {
-        throw new Error("ERREUR_CLOUD");
+        throw new Error("ERREUR_CLOUD: Impossible de joindre le serveur.");
       }
       throw error;
     }
@@ -147,7 +151,7 @@ export class ApiService {
 
   // --- Admin ---
   static getAdminPmes() { return this.request<any[]>('/admin/pme/index.php', 'GET'); }
-  static createAdminPme(data: any) { return this.request<any>('/admin/pme/index.php', 'POST', data); }
+  static createAdminPme(data: any) { return this.request<any>('/admin/pme/create.php', 'POST', data); }
   static updateAdminPme(data: any) { return this.request<any>('/admin/pme/index.php', 'PUT', data); }
   static deleteAdminPme(id: string) { return this.request<any>('/admin/pme/index.php', 'DELETE', { id }); }
   static getUsers(pme_id: string) { return this.request<any[]>('/users/index.php', 'GET', { pme_id }); }

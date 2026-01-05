@@ -8,7 +8,8 @@ import {
   Loader2, Edit3, Save, 
   ShieldCheck, User, KeyRound,
   Users, Shield, Eye, EyeOff, Building2, UserCircle2,
-  Lock, UserPlus, ArrowLeft, AlertTriangle, Zap, LogOut
+  Lock, UserPlus, ArrowLeft, AlertTriangle, Zap, LogOut,
+  Calendar
 } from 'lucide-react';
 
 type AdminView = 'LIST' | 'PME_FORM' | 'USER_LIST' | 'USER_FORM';
@@ -33,7 +34,7 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
     owner_name: '',
     license_key: '',
     license_type: 'NORMAL' as any,
-    expiry_months: '12' as any,
+    expiry_months: '12',
     status: 'ACTIVE'
   });
 
@@ -84,12 +85,10 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
     }
   };
 
-  // --- Helpers ID Génération ---
-  
   const getNextAvailableId = (prefix: string, list: any[]) => {
     const nums = list
       .map(item => {
-        const parts = item.id.split('-');
+        const parts = String(item.id).split('-');
         return parts.length > 1 ? parseInt(parts[1]) : 0;
       })
       .filter(n => !isNaN(n));
@@ -98,7 +97,7 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
   };
 
   const generateRandomUserId = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclut O, 0, I, 1
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let randomPart = '';
     for (let i = 0; i < 6; i++) {
       randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -110,13 +109,6 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
     return 'LIC-' + Math.random().toString(36).substr(2, 4).toUpperCase() + '-' + Math.floor(1000 + Math.random() * 9000);
   };
 
-  const calculateExpiry = (months: string) => {
-    const date = new Date();
-    date.setMonth(date.getMonth() + parseInt(months));
-    return date.toISOString().split('T')[0];
-  };
-
-  // --- Handlers PME ---
   const goToAddPme = () => {
     setEditingPme(null);
     setPmeFormData({
@@ -144,16 +136,32 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
     }
     setIsLoading(true);
     try {
-      const payload = {
-        ...pmeFormData,
-        expiry_date: pmeFormData.license_type === 'NORMAL' ? calculateExpiry(pmeFormData.expiry_months) : '2099-12-31'
-      };
-      if (editingPme) await ApiService.updateAdminPme(payload);
-      else await ApiService.createAdminPme(payload);
+      if (editingPme) {
+        // En cas d'édition, on garde la logique précédente ou on adapte
+        const { expiry_months, ...baseData } = pmeFormData;
+        await ApiService.updateAdminPme(baseData);
+      } else {
+        // Logique conforme à la nouvelle documentation create.php
+        const payload: any = {
+          id: pmeFormData.id,
+          name: pmeFormData.name,
+          owner_name: pmeFormData.owner_name,
+          license_key: pmeFormData.license_key,
+          license_type: pmeFormData.license_type,
+        };
+        
+        // Duration n'est requis que pour NORMAL (6 ou 12)
+        if (pmeFormData.license_type === 'NORMAL') {
+          payload.duration = parseInt(pmeFormData.expiry_months);
+        }
+        
+        await ApiService.createAdminPme(payload);
+      }
+      
       await loadPmes();
       setCurrentView('LIST');
     } catch (e: any) {
-      alert("Erreur PME: " + e.message);
+      alert("ERREUR CREATION CLOUD: " + (e.message || "Le serveur a refusé la requête. Vérifiez vos permissions ROOT."));
     } finally {
       setIsLoading(false);
     }
@@ -172,7 +180,6 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
     }
   };
 
-  // --- Handlers Users ---
   const goToUserList = (pme: PMEEntry) => {
     setSelectedPmeForUsers(pme);
     loadUsersForPme(pme.id);
@@ -278,8 +285,6 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
     </button>
   );
 
-  // --- Views ---
-
   if (currentView === 'LIST') {
     return (
       <div className="space-y-8 view-transition">
@@ -317,10 +322,18 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
         <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center space-x-3">
           <Search size={20} className="text-slate-400" />
           <input type="text" placeholder="Chercher une PME, un gérant..." className="flex-1 outline-none font-bold text-sm bg-transparent" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <button onClick={loadPmes} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400">
+            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {pmeList.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+          {isLoading && pmeList.length === 0 ? (
+             <div className="col-span-full py-20 flex flex-col items-center justify-center space-y-4">
+                <Loader2 size={48} className="animate-spin text-emerald-500" />
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Récupération des données Cloud...</p>
+             </div>
+          ) : pmeList.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
             <div key={p.id} className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col hover:border-emerald-500 transition-all group">
               <div className="p-8 space-y-6 flex-1">
                 <div className="flex justify-between items-start">
@@ -379,7 +392,7 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">ID SYSTÈME: {pmeFormData.id}</p>
             </div>
           </div>
-          <div className="p-10 md:p-14 space-y-10">
+          <div className="p-10 md:p-14 space-y-10 text-left">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-2 col-span-full">
                 <div className="flex justify-between items-center px-2">
@@ -416,6 +429,23 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
                   ))}
                 </div>
               </div>
+
+              {/* Nouveau sélecteur de durée pour licences normales */}
+              {pmeFormData.license_type === 'NORMAL' && (
+                <div className="space-y-2 animate-in slide-in-from-top-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase px-2 tracking-widest flex items-center gap-2">
+                    <Calendar size={12} /> Durée de Validité
+                  </label>
+                  <select 
+                    className="w-full px-8 py-4 bg-blue-50 border-2 border-blue-100 rounded-[1.8rem] font-black text-blue-700 outline-none focus:border-blue-500 transition-all"
+                    value={pmeFormData.expiry_months}
+                    onChange={(e) => setPmeFormData({...pmeFormData, expiry_months: e.target.value})}
+                  >
+                    <option value="6">6 Mois</option>
+                    <option value="12">12 Mois (1 An)</option>
+                  </select>
+                </div>
+              )}
             </div>
             <div className="pt-10 flex flex-col md:flex-row gap-4 border-t border-slate-50">
                <button onClick={() => setCurrentView('LIST')} className="flex-1 py-6 rounded-[2rem] border-2 border-slate-200 text-slate-400 font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-50">Annuler</button>
@@ -430,13 +460,14 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
     );
   }
 
+  // ... (Reste du composant inchangé)
   if (currentView === 'USER_LIST' && selectedPmeForUsers) {
     return (
       <div className="max-w-6xl mx-auto space-y-10 view-transition pb-24">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div className="space-y-4">
             <button onClick={() => setCurrentView('LIST')} className="flex items-center space-x-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-all"><ArrowLeft size={16} /> <span>Retour aux licences</span></button>
-            <div className="flex items-center space-x-5">
+            <div className="flex items-center space-x-5 text-left">
               <div className="p-4 bg-blue-600 text-white rounded-3xl shadow-xl"><Users size={32} /></div>
               <div>
                 <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedPmeForUsers.name}</h1>
@@ -455,7 +486,7 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pmeUsers.map((u, i) => (
             <div key={i} className={`bg-white rounded-[2.5rem] border-2 transition-all overflow-hidden flex flex-col ${u.status === 'DISABLED' ? 'opacity-50 grayscale border-slate-100' : 'border-slate-50 hover:border-blue-400 shadow-sm'}`}>
-              <div className="p-8 space-y-6 flex-1">
+              <div className="p-8 space-y-6 flex-1 text-left">
                 <div className="flex justify-between items-start">
                    <div className={`p-4 rounded-2xl ${u.role === 'MANAGER' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}><Shield size={24} /></div>
                    <div className="flex space-x-1">
@@ -489,12 +520,12 @@ const AdminSpace: React.FC<AdminSpaceProps> = ({ onLogout }) => {
         <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden">
           <div className="p-10 bg-slate-900 text-white flex items-center space-x-6">
             <div className="p-5 bg-blue-600 rounded-3xl text-white shadow-xl"><UserPlus size={32} /></div>
-            <div>
+            <div className="text-left">
               <h2 className="text-2xl font-black uppercase tracking-tight">{editingUser ? 'Modifier le Compte' : 'Nouvel Accès Personnel'}</h2>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">PME: {selectedPmeForUsers.name}</p>
             </div>
           </div>
-          <div className="p-10 md:p-14 space-y-12">
+          <div className="p-10 md:p-14 space-y-12 text-left">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-2 col-span-full">
                 <div className="flex justify-between items-center px-2">
