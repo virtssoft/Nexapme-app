@@ -15,15 +15,9 @@
         window.process = { env: { API_KEY: "" } };
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                const swPath = window.location.pathname.includes('index.html') 
-                    ? 'sw.js' 
-                    : './sw.js';
-                
-                navigator.serviceWorker.register(swPath).then(registration => {
-                    console.log('SW OK');
-                }).catch(err => {
-                    console.log('SW registration skipped or failed in this environment');
-                });
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => console.log('SW Registered'))
+                    .catch(err => console.log('SW Registration failed', err));
             });
         }
     </script>
